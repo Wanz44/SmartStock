@@ -1,0 +1,7 @@
+{
+  "name": "SmartStock Pro",
+  "description": "Système de gestion de stock intelligent avec inventaires automatisés, alertes de seuil critique, consommation événementielle et assistant IA Gemini pour l'optimisation des commandes.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
