@@ -35,7 +35,7 @@ export interface Furniture {
 export interface InventoryLog {
   id: string;
   date: string;
-  type: 'entry' | 'exit' | 'transfer' | 'furniture_check' | 'refill';
+  type: 'entry' | 'exit' | 'transfer' | 'furniture_check' | 'refill' | 'archive' | 'adjustment';
   productId: string;
   productName: string;
   fromSiteId?: string;
@@ -44,6 +44,7 @@ export interface InventoryLog {
   finalStock: number;
   reason?: string;
   responsible?: string;
+  isArchived?: boolean;
 }
 
-export type ViewType = 'dashboard' | 'inventory' | 'furniture' | 'transfers' | 'replenishment' | 'history' | 'settings' | 'ai';
+export type ViewType = 'dashboard' | 'inventory' | 'furniture' | 'replenishment' | 'history' | 'settings' | 'monthly_report';

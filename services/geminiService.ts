@@ -22,12 +22,10 @@ export const getStockInsights = async (products: Product[], history: InventoryLo
   `;
 
   try {
-    // Using gemini-3-flash-preview for summarization and analysis tasks
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
-    // Use .text property to get the generated content (not a method call)
     return response.text;
   } catch (error) {
     console.error("Gemini Error:", error);
@@ -60,7 +58,6 @@ export const processImportedData = async (rawText: string, existingCategories: s
   `;
 
   try {
-    // Configured with responseSchema for robust JSON extraction as per guidelines
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -87,7 +84,6 @@ export const processImportedData = async (rawText: string, existingCategories: s
       }
     });
     
-    // Use .text property and trim for safety
     const text = response.text || "[]";
     return JSON.parse(text.trim()) as Partial<Product>[];
   } catch (error) {

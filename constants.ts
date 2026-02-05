@@ -10,11 +10,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     minStock: 20,
     monthlyNeed: 20,
     unit: 'sacs',
-    unitPrice: 2.5,
-    currency: '$',
+    unitPrice: 2500,
+    currency: 'Fc',
     supplier: "Fournisseur A",
-    // Fix: Added missing mandatory property 'siteId'
-    siteId: 'main',
+    siteId: 'S1',
     lastInventoryDate: new Date().toISOString()
   },
   {
@@ -25,11 +24,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     minStock: 15,
     monthlyNeed: 20,
     unit: 'paquets',
-    unitPrice: 3.0,
-    currency: '$',
+    unitPrice: 1500,
+    currency: 'Fc',
     supplier: "Fournisseur A",
-    // Fix: Added missing mandatory property 'siteId'
-    siteId: 'main',
+    siteId: 'S1',
     lastInventoryDate: new Date().toISOString()
   },
   {
@@ -40,11 +38,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     minStock: 10,
     monthlyNeed: 15,
     unit: 'litres',
-    unitPrice: 4.5,
-    currency: '$',
+    unitPrice: 8500,
+    currency: 'Fc',
     supplier: "Fournisseur B",
-    // Fix: Added missing mandatory property 'siteId'
-    siteId: 'main',
+    siteId: 'S1',
     lastInventoryDate: new Date().toISOString()
   },
   {
@@ -55,11 +52,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     minStock: 30,
     monthlyNeed: 40,
     unit: 'unités',
-    unitPrice: 0.5,
-    currency: '$',
+    unitPrice: 500,
+    currency: 'Fc',
     supplier: "Fournisseur C",
-    // Fix: Added missing mandatory property 'siteId'
-    siteId: 'main',
+    siteId: 'S1',
     lastInventoryDate: new Date().toISOString()
   },
   {
@@ -70,16 +66,15 @@ export const INITIAL_PRODUCTS: Product[] = [
     minStock: 5,
     monthlyNeed: 8,
     unit: 'unités',
-    unitPrice: 12.0,
-    currency: '$',
+    unitPrice: 25000,
+    currency: 'Fc',
     supplier: "Fournisseur D",
-    // Fix: Added missing mandatory property 'siteId'
-    siteId: 'main',
+    siteId: 'S1',
     lastInventoryDate: new Date().toISOString()
   }
 ];
 
-export const CATEGORIES = [
+export const INITIAL_CATEGORIES = [
   "Alimentaire",
   "Boisson",
   "Matériel",
