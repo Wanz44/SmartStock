@@ -1,36 +1,49 @@
 
+export interface Site {
+  id: string;
+  name: string;
+  location?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
   category: string;
   currentStock: number;
   minStock: number;
-  monthlyNeed: number; // Quantité consommée en moyenne par mois
+  monthlyNeed: number;
   unit: string;
   unitPrice: number;
-  currency: 'Fc' | '$'; // Devise du prix
+  currency: 'Fc' | '$';
   supplier?: string;
+  siteId: string;
   lastInventoryDate: string;
+}
+
+export interface Furniture {
+  id: string;
+  code: string;
+  name: string;
+  siteId: string;
+  currentCount: number;
+  previousCount: number;
+  condition: 'Neuf' | 'Bon' | 'Usé' | 'Endommagé';
+  lastChecked: string;
+  observation?: string;
 }
 
 export interface InventoryLog {
   id: string;
   date: string;
-  type: 'manual_update' | 'refill' | 'inventory_check';
+  type: 'entry' | 'exit' | 'transfer' | 'furniture_check' | 'refill';
   productId: string;
   productName: string;
+  fromSiteId?: string;
+  toSiteId?: string;
   changeAmount: number;
   finalStock: number;
   reason?: string;
+  responsible?: string;
 }
 
-export interface InventorySnapshot {
-  id: string;
-  date: string;
-  items: {
-    productId: string;
-    quantity: number;
-  }[];
-}
-
-export type ViewType = 'dashboard' | 'inventory' | 'replenishment' | 'history' | 'ai' | 'settings';
+export type ViewType = 'dashboard' | 'inventory' | 'furniture' | 'transfers' | 'replenishment' | 'history' | 'settings' | 'ai';

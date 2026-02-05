@@ -13,6 +13,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     unitPrice: 2.5,
     currency: '$',
     supplier: "Fournisseur A",
+    // Fix: Added missing mandatory property 'siteId'
+    siteId: 'main',
     lastInventoryDate: new Date().toISOString()
   },
   {
@@ -26,6 +28,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     unitPrice: 3.0,
     currency: '$',
     supplier: "Fournisseur A",
+    // Fix: Added missing mandatory property 'siteId'
+    siteId: 'main',
     lastInventoryDate: new Date().toISOString()
   },
   {
@@ -39,6 +43,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     unitPrice: 4.5,
     currency: '$',
     supplier: "Fournisseur B",
+    // Fix: Added missing mandatory property 'siteId'
+    siteId: 'main',
     lastInventoryDate: new Date().toISOString()
   },
   {
@@ -52,6 +58,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     unitPrice: 0.5,
     currency: '$',
     supplier: "Fournisseur C",
+    // Fix: Added missing mandatory property 'siteId'
+    siteId: 'main',
     lastInventoryDate: new Date().toISOString()
   },
   {
@@ -65,6 +73,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     unitPrice: 12.0,
     currency: '$',
     supplier: "Fournisseur D",
+    // Fix: Added missing mandatory property 'siteId'
+    siteId: 'main',
     lastInventoryDate: new Date().toISOString()
   }
 ];
