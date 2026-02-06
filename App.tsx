@@ -7,7 +7,7 @@ import {
   ShieldCheck, ArrowUpDown, ChevronDown, CheckCircle, Info, PieChart as PieChartIcon,
   LineChart as LineChartIcon, BarChart3, Tag, Sparkles, RefreshCcw, Archive, FileUp, Loader2,
   Database, Truck, ShieldAlert, Globe, HardDriveDownload, RotateCcw, Cpu, FileText, UserCheck, TrendingDown,
-  FileDown, FileType, Menu
+  FileDown, FileType, Menu, User, Lock, Eye, EyeOff
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Area, PieChart, Pie, Bar, Line, Legend
@@ -25,6 +25,12 @@ type SortOrder = 'asc' | 'desc';
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Login State
+  const [loginForm, setLoginForm] = useState({ username: 'admin', password: 'admin' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [history, setHistory] = useState<InventoryLog[]>([]);
   const [archives, setArchives] = useState<InventoryLog[]>([]);
@@ -51,7 +57,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const saved = (key: string) => localStorage.getItem(key);
-    if (saved('ss_session')) setIsLoggedIn(true);
+    if (saved('ss_session')) {
+      console.log("Restoring session...");
+      setIsLoggedIn(true);
+    }
     setProducts(JSON.parse(saved('stockProducts') || JSON.stringify(INITIAL_PRODUCTS)));
     setHistory(JSON.parse(saved('stockHistory') || '[]'));
     setArchives(JSON.parse(saved('stockArchives') || '[]'));
@@ -204,6 +213,7 @@ const App: React.FC = () => {
     finally { setIsAiLoading(false); }
   };
 
+  // --- VIEWS ---
   const DashboardView = () => {
     const totalValue = useMemo(() => products.reduce((acc, p) => acc + (p.currentStock * p.unitPrice), 0), [products]);
     const categoryValueData = useMemo(() => {
@@ -241,10 +251,10 @@ const App: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-8">
-          <div className="bg-white p-6 lg:p-12 border rounded-[2rem] lg:rounded-[3.5rem] shadow-sm">
+          <div className="bg-white p-6 lg:p-12 border rounded-[2rem] lg:rounded-[3.5rem] shadow-sm min-h-[450px]">
              <h3 className="text-base lg:text-lg font-black uppercase tracking-[0.2em] mb-8 lg:mb-12 flex items-center gap-3"><PieChartIcon className="w-5 h-5 text-emerald-600" /> Structure Fiscale</h3>
-             <div className="h-[300px] lg:h-[400px] w-full flex flex-col sm:flex-row items-center gap-6 lg:gap-8">
-                <ResponsiveContainer width="100%" height="100%">
+             <div className="h-[350px] lg:h-[400px] w-full flex flex-col sm:flex-row items-center gap-6 lg:gap-8 overflow-hidden">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie data={categoryValueData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={4} dataKey="value">
                       {categoryValueData.map((_, index) => <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />)}
@@ -253,20 +263,20 @@ const App: React.FC = () => {
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="w-full sm:w-1/2 space-y-2 lg:space-y-3">
-                   {categoryValueData.map((d, i) => (
+                   {categoryValueData.slice(0, 5).map((d, i) => (
                      <div key={i} className="flex justify-between p-3 lg:p-4 bg-slate-50 rounded-xl lg:rounded-2xl border hover:border-emerald-100 transition-all">
-                        <span className="text-[9px] lg:text-[11px] font-black uppercase text-slate-700">{d.name}</span>
-                        <span className="text-[9px] lg:text-[11px] font-black text-slate-900">{d.value.toLocaleString()} Fc</span>
+                        <span className="text-[9px] lg:text-[11px] font-black uppercase text-slate-700 truncate mr-2">{d.name}</span>
+                        <span className="text-[9px] lg:text-[11px] font-black text-slate-900 whitespace-nowrap">{d.value.toLocaleString()} Fc</span>
                      </div>
                    ))}
                 </div>
              </div>
           </div>
 
-          <div className="bg-white p-6 lg:p-12 border rounded-[2rem] lg:rounded-[3.5rem] shadow-sm">
+          <div className="bg-white p-6 lg:p-12 border rounded-[2rem] lg:rounded-[3.5rem] shadow-sm min-h-[450px]">
              <h3 className="text-base lg:text-lg font-black uppercase tracking-[0.2em] mb-8 lg:mb-12 flex items-center gap-3"><LineChartIcon className="w-5 h-5 text-blue-600" /> Performance & Intensité</h3>
-             <div className="h-[300px] lg:h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
+             <div className="h-[350px] lg:h-[400px] w-full overflow-hidden">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <ComposedChart data={combinedTimelineData}>
                     <defs><linearGradient id="colorStock" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2b579a" stopOpacity={0.1}/><stop offset="95%" stopColor="#2b579a" stopOpacity={0}/></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -381,11 +391,6 @@ const App: React.FC = () => {
       }, 0);
 
       const residualValue = products.reduce((acc, p) => acc + (p.currentStock * p.unitPrice), 0);
-
-      const consumption: Record<string, number> = {};
-      logs.filter(l => l.type === 'exit').forEach(l => {
-        consumption[l.productName] = (consumption[l.productName] || 0) + Math.abs(l.changeAmount);
-      });
 
       const siteStats = sites.map(site => {
         const siteProds = products.filter(p => p.siteId === site.id);
@@ -513,21 +518,154 @@ const App: React.FC = () => {
     </div>
   );
 
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoggingIn) return;
+
+    console.log("Attempting login with:", loginForm.username);
+    setIsLoggingIn(true);
+    
+    // Immediate validation
+    if (loginForm.username.trim() === 'admin' && loginForm.password.trim() === 'admin') {
+      console.log("Login successful!");
+      localStorage.setItem('ss_session', 'active');
+      setIsLoggedIn(true);
+      showToast("Bienvenue sur SmartStock Pro", "success");
+    } else {
+      console.warn("Login failed: Invalid credentials");
+      showToast("Identifiants incorrects (Défaut: admin/admin)", "error");
+    }
+    setIsLoggingIn(false);
+  };
+
   if (!isLoggedIn) return (
-    <div className="min-h-screen flex bg-white font-sans overflow-hidden">
-      <div className="hidden lg:flex w-1/2 bg-[#004a23] p-24 flex-col justify-between">
-        <div><div className="flex items-center gap-5 mb-16"><div className="bg-emerald-500 p-4 rounded-3xl"><FileSpreadsheet className="w-12 h-12 text-white" /></div><h1 className="text-4xl font-black text-white italic tracking-tighter uppercase">SmartStock<span className="text-emerald-400">Pro</span></h1></div><h2 className="text-7xl font-black text-white leading-tight uppercase italic mb-10">Maitrisez<br/>vos flux de<br/><span className="text-emerald-400">A à Z.</span></h2></div>
-        <div className="flex gap-8"><div className="bg-white/10 backdrop-blur-xl p-8 rounded-[3rem] flex-1"><ShieldCheck className="w-10 h-10 text-emerald-400 mb-6" /><p className="text-white text-[12px] font-black uppercase tracking-widest">Sécurité Pro</p></div><div className="bg-white/10 backdrop-blur-xl p-8 rounded-[3rem] flex-1"><BarChart3 className="w-10 h-10 text-blue-400 mb-6" /><p className="text-white text-[12px] font-black uppercase tracking-widest">Analyses IA</p></div></div>
+    <div className="min-h-screen flex bg-[#f8fafc] font-sans overflow-hidden">
+      {/* Côté Illustration & Branding */}
+      <div className="hidden lg:flex w-7/12 bg-[#004a23] p-24 flex-col justify-between relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-emerald-500/10 rounded-full -mr-[300px] -mt-[300px]" />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-emerald-400/5 rounded-full -ml-[200px] -mb-[200px]" />
+        
+        <div className="relative z-10">
+          <div className="flex items-center gap-6 mb-20 animate-in slide-in-from-left duration-700">
+            <div className="bg-emerald-500 p-5 rounded-[2rem] shadow-2xl ring-8 ring-emerald-500/20">
+              <FileSpreadsheet className="w-14 h-14 text-white" />
+            </div>
+            <div>
+              <h1 className="text-5xl font-black text-white italic tracking-tighter uppercase">SmartStock<span className="text-emerald-400">Pro</span></h1>
+              <p className="text-emerald-400/60 font-black uppercase tracking-[0.4em] text-[10px] mt-2">Enterprise Logisitics Solution</p>
+            </div>
+          </div>
+          <h2 className="text-[5.5rem] font-black text-white leading-[0.9] uppercase italic mb-12 tracking-tighter animate-in slide-in-from-left duration-1000 delay-100">
+            Simplifiez.<br/>Analysez.<br/><span className="text-emerald-400">Optimisez.</span>
+          </h2>
+          <p className="text-emerald-100/60 text-lg font-medium max-w-lg leading-relaxed animate-in slide-in-from-left duration-1000 delay-200">
+            L'assistant intelligent qui transforme la gestion complexe de vos inventaires en une expérience fluide et prédictive.
+          </p>
+        </div>
+
+        <div className="flex gap-12 relative z-10 animate-in fade-in duration-1000 delay-500">
+          <div className="bg-white/5 backdrop-blur-2xl p-10 rounded-[3.5rem] flex-1 border border-white/10 hover:bg-white/10 transition-colors group cursor-default">
+            <ShieldCheck className="w-12 h-12 text-emerald-400 mb-8 group-hover:scale-110 transition-transform" />
+            <p className="text-white text-[13px] font-black uppercase tracking-[0.2em]">Sécurité Bancaire</p>
+            <p className="text-white/40 text-[11px] mt-2 font-medium">Chiffrement AES-256 de bout en bout.</p>
+          </div>
+          <div className="bg-white/5 backdrop-blur-2xl p-10 rounded-[3.5rem] flex-1 border border-white/10 hover:bg-white/10 transition-colors group cursor-default">
+            <BarChart3 className="w-12 h-12 text-blue-400 mb-8 group-hover:scale-110 transition-transform" />
+            <p className="text-white text-[13px] font-black uppercase tracking-[0.2em]">Intelligence Artificielle</p>
+            <p className="text-white/40 text-[11px] mt-2 font-medium">Prédiction des ruptures par Gemini.</p>
+          </div>
+        </div>
       </div>
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 lg:p-12 bg-slate-50">
-         <form onSubmit={e=>{e.preventDefault(); setIsLoggedIn(true); localStorage.setItem('ss_session', 'active');}} className="w-full max-w-sm lg:space-y-16 space-y-12 text-center">
-           <div><h3 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tighter uppercase italic">Connexion</h3><p className="text-slate-400 text-[10px] lg:text-[11px] font-black uppercase tracking-[0.3em] lg:tracking-[0.4em] mt-4 lg:mt-5">Authentification SmartStock</p></div>
-           <div className="space-y-4 lg:space-y-6">
-             <input type="text" placeholder="Identifiant" className="w-full p-5 lg:p-6 bg-white border border-slate-200 rounded-2xl lg:rounded-[2.5rem] outline-none font-bold" defaultValue="admin" />
-             <input type="password" placeholder="Clé d'Accès" className="w-full p-5 lg:p-6 bg-white border border-slate-200 rounded-2xl lg:rounded-[2.5rem] outline-none font-bold" defaultValue="admin" />
-             <button className="w-full bg-[#107c41] text-white py-5 lg:py-7 rounded-2xl lg:rounded-[2.5rem] font-black text-[10px] lg:text-xs uppercase tracking-[0.3em] lg:tracking-[0.4em] shadow-xl hover:-translate-y-1 transition-all">Lancer l'Application</button>
+
+      {/* Côté Formulaire */}
+      <div className="w-full lg:w-5/12 flex items-center justify-center p-8 lg:p-16 bg-white relative">
+         <div className="w-full max-w-md space-y-16">
+           <div className="text-center lg:text-left">
+             <div className="lg:hidden flex justify-center mb-8">
+                <div className="bg-[#004a23] p-4 rounded-3xl shadow-xl"><FileSpreadsheet className="w-10 h-10 text-white" /></div>
+             </div>
+             <h3 className="text-5xl font-black text-slate-900 tracking-tighter uppercase italic">Se connecter</h3>
+             <p className="text-slate-400 text-[11px] font-black uppercase tracking-[0.4em] mt-6 flex items-center justify-center lg:justify-start gap-3">
+               Accès Portail Sécurisé <Info className="w-3 h-3 text-emerald-500" />
+             </p>
            </div>
-         </form>
+
+           <form onSubmit={handleLoginSubmit} className="space-y-8">
+             <div className="space-y-6">
+                {/* Champ Identifiant */}
+                <div className="space-y-3 group">
+                  <label htmlFor="username" className="block text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Utilisateur</label>
+                  <div className="relative">
+                    <User className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-600 transition-colors" />
+                    <input 
+                      id="username"
+                      type="text" 
+                      placeholder="Identifiant (ex: admin)" 
+                      autoComplete="username"
+                      required
+                      value={loginForm.username}
+                      onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
+                      className="w-full pl-16 pr-8 py-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] outline-none font-bold text-slate-950 placeholder:text-slate-400 text-lg focus:border-emerald-500 focus:bg-white focus:ring-8 focus:ring-emerald-50 transition-all" 
+                    />
+                  </div>
+                </div>
+
+                {/* Champ Mot de passe */}
+                <div className="space-y-3 group">
+                  <label htmlFor="password" className="block text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Mot de passe</label>
+                  <div className="relative">
+                    <Lock className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-600 transition-colors" />
+                    <input 
+                      id="password"
+                      type={showPassword ? "text" : "password"} 
+                      placeholder="••••••••" 
+                      autoComplete="current-password"
+                      required
+                      value={loginForm.password}
+                      onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                      className="w-full pl-16 pr-20 py-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] outline-none font-bold text-slate-950 placeholder:text-slate-400 text-lg focus:border-emerald-500 focus:bg-white focus:ring-8 focus:ring-emerald-50 transition-all" 
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-6 top-1/2 -translate-y-1/2 p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+             </div>
+
+             <div className="flex items-center justify-between px-2">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <div className="relative">
+                    <input type="checkbox" className="sr-only peer" defaultChecked />
+                    <div className="w-6 h-6 bg-slate-200 rounded-lg peer-checked:bg-emerald-600 transition-colors" />
+                    <CheckCircle className="absolute inset-0 w-6 h-6 text-white opacity-0 peer-checked:opacity-100 transition-opacity p-1" />
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Rester connecté</span>
+                </label>
+                <button type="button" className="text-[11px] font-black text-emerald-600 uppercase tracking-widest hover:text-emerald-700 hover:underline transition-all">Code oublié ?</button>
+             </div>
+
+             <button 
+               type="submit" 
+               disabled={isLoggingIn}
+               aria-busy={isLoggingIn}
+               className="w-full bg-[#107c41] text-white py-7 rounded-[2.5rem] font-black text-sm uppercase tracking-[0.4em] shadow-2xl shadow-emerald-200 hover:-translate-y-2 active:scale-95 disabled:opacity-70 disabled:pointer-events-none hover:bg-emerald-800 transition-all flex items-center justify-center gap-4 group"
+             >
+               {isLoggingIn ? (
+                 <Loader2 className="w-6 h-6 animate-spin" />
+               ) : (
+                 <>Connexion <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></>
+               )}
+             </button>
+
+             <p className="text-center text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+                Support technique: +243 00 000 000
+             </p>
+           </form>
+         </div>
       </div>
     </div>
   );
