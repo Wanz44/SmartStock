@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, Package, History as HistoryIcon, Plus, AlertTriangle, 
@@ -8,7 +7,7 @@ import {
   ShieldCheck, ArrowUpDown, ChevronDown, CheckCircle, Info, PieChart as PieChartIcon,
   LineChart as LineChartIcon, BarChart3, Tag, Sparkles, RefreshCcw, Archive, FileUp, Loader2,
   Database, Truck, ShieldAlert, Globe, HardDriveDownload, RotateCcw, Cpu, FileText, UserCheck, TrendingDown,
-  FileDown, FileType
+  FileDown, FileType, Menu
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Area, PieChart, Pie, Bar, Line, Legend
@@ -25,6 +24,7 @@ type SortOrder = 'asc' | 'desc';
 
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [history, setHistory] = useState<InventoryLog[]>([]);
   const [archives, setArchives] = useState<InventoryLog[]>([]);
@@ -37,6 +37,7 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState<Partial<Product>>({ currency: 'Fc', siteId: 'S1' });
 
@@ -96,7 +97,16 @@ const App: React.FC = () => {
     });
   }, [products, searchTerm, siteFilter, sortConfig]);
 
-  // --- ACTIONS SYSTEME ---
+  const handleLogout = () => {
+    setIsLogoutModalOpen(true);
+  };
+
+  const confirmLogout = () => {
+    setIsLoggedIn(false);
+    localStorage.removeItem('ss_session');
+    setIsLogoutModalOpen(false);
+    showToast("Déconnexion effectuée avec succès", "info");
+  };
 
   const exportCSV = (data: Product[], filename: string) => {
     const headers = ['ID', 'Nom', 'Catégorie', 'Stock Actuel', 'Stock Min', 'Besoin Mensuel', 'Unité', 'Prix Unitaire', 'Devise', 'Fournisseur', 'Site ID', 'Dernier Inventaire'];
@@ -194,8 +204,6 @@ const App: React.FC = () => {
     finally { setIsAiLoading(false); }
   };
 
-  // --- VUES ---
-
   const DashboardView = () => {
     const totalValue = useMemo(() => products.reduce((acc, p) => acc + (p.currentStock * p.unitPrice), 0), [products]);
     const categoryValueData = useMemo(() => {
@@ -216,59 +224,59 @@ const App: React.FC = () => {
     }, [totalValue]);
 
     return (
-      <div className="space-y-12 pb-24">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+      <div className="space-y-6 lg:space-y-12 pb-24">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-8">
           {[
             { label: 'Valeur Inventaire', val: totalValue.toLocaleString() + ' Fc', icon: DollarSign, color: 'emerald' },
             { label: 'En Rupture', val: products.filter(p=>p.currentStock===0).length + ' Réf.', icon: AlertTriangle, color: 'rose' },
             { label: 'Alertes Seuil', val: products.filter(p=>p.currentStock<=p.minStock && p.currentStock>0).length + ' Réf.', icon: TrendingUp, color: 'amber' },
             { label: 'Catalogue', val: products.length + ' Pdt.', icon: Package, color: 'slate' }
           ].map((c, i) => (
-            <div key={i} className="bg-white p-10 border rounded-[3rem] shadow-sm group hover:-translate-y-2 transition-all">
-              <div className={`p-4 bg-${c.color}-50 text-${c.color}-600 rounded-3xl w-max mb-8`}><c.icon className="w-8 h-8" /></div>
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">{c.label}</p>
-              <h4 className="text-4xl font-black text-slate-900 tracking-tight italic tabular-nums">{c.val}</h4>
+            <div key={i} className="bg-white p-6 lg:p-10 border rounded-[2rem] lg:rounded-[3rem] shadow-sm group hover:-translate-y-2 transition-all">
+              <div className={`p-3 lg:p-4 bg-${c.color}-50 text-${c.color}-600 rounded-2xl lg:rounded-3xl w-max mb-4 lg:mb-8`}><c.icon className="w-6 h-6 lg:w-8 lg:h-8" /></div>
+              <p className="text-[9px] lg:text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1 lg:mb-2">{c.label}</p>
+              <h4 className="text-2xl lg:text-4xl font-black text-slate-900 tracking-tight italic tabular-nums">{c.val}</h4>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          <div className="bg-white p-12 border rounded-[3.5rem] shadow-sm">
-             <h3 className="text-lg font-black uppercase tracking-[0.25em] mb-12 flex items-center gap-4"><PieChartIcon className="w-5 h-5 text-emerald-600" /> Structure Fiscale</h3>
-             <div className="h-[400px] w-full flex flex-col sm:flex-row items-center gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-8">
+          <div className="bg-white p-6 lg:p-12 border rounded-[2rem] lg:rounded-[3.5rem] shadow-sm">
+             <h3 className="text-base lg:text-lg font-black uppercase tracking-[0.2em] mb-8 lg:mb-12 flex items-center gap-3"><PieChartIcon className="w-5 h-5 text-emerald-600" /> Structure Fiscale</h3>
+             <div className="h-[300px] lg:h-[400px] w-full flex flex-col sm:flex-row items-center gap-6 lg:gap-8">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={categoryValueData} cx="50%" cy="50%" innerRadius={90} outerRadius={140} paddingAngle={4} dataKey="value">
+                    <Pie data={categoryValueData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={4} dataKey="value">
                       {categoryValueData.map((_, index) => <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} stroke="none" />)}
                     </Pie>
                     <Tooltip />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="w-full sm:w-1/2 space-y-3">
+                <div className="w-full sm:w-1/2 space-y-2 lg:space-y-3">
                    {categoryValueData.map((d, i) => (
-                     <div key={i} className="flex justify-between p-4 bg-slate-50 rounded-2xl border hover:border-emerald-100 transition-all">
-                        <span className="text-[11px] font-black uppercase text-slate-700">{d.name}</span>
-                        <span className="text-[11px] font-black text-slate-900">{d.value.toLocaleString()} Fc</span>
+                     <div key={i} className="flex justify-between p-3 lg:p-4 bg-slate-50 rounded-xl lg:rounded-2xl border hover:border-emerald-100 transition-all">
+                        <span className="text-[9px] lg:text-[11px] font-black uppercase text-slate-700">{d.name}</span>
+                        <span className="text-[9px] lg:text-[11px] font-black text-slate-900">{d.value.toLocaleString()} Fc</span>
                      </div>
                    ))}
                 </div>
              </div>
           </div>
 
-          <div className="bg-white p-12 border rounded-[3.5rem] shadow-sm">
-             <h3 className="text-lg font-black uppercase tracking-[0.25em] mb-12 flex items-center gap-4"><LineChartIcon className="w-5 h-5 text-blue-600" /> Performance & Intensité</h3>
-             <div className="h-[400px]">
+          <div className="bg-white p-6 lg:p-12 border rounded-[2rem] lg:rounded-[3.5rem] shadow-sm">
+             <h3 className="text-base lg:text-lg font-black uppercase tracking-[0.2em] mb-8 lg:mb-12 flex items-center gap-3"><LineChartIcon className="w-5 h-5 text-blue-600" /> Performance & Intensité</h3>
+             <div className="h-[300px] lg:h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={combinedTimelineData}>
                     <defs><linearGradient id="colorStock" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2b579a" stopOpacity={0.1}/><stop offset="95%" stopColor="#2b579a" stopOpacity={0}/></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="date" tick={{fontSize: 10, fontWeight: 800}} axisLine={false} tickLine={false} dy={10} />
-                    <YAxis yAxisId="left" tick={{fontSize: 10, fontWeight: 800}} axisLine={false} tickLine={false} dx={-10} />
-                    <YAxis yAxisId="right" orientation="right" tick={{fontSize: 10, fontWeight: 800}} axisLine={false} tickLine={false} dx={10} />
+                    <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 800}} axisLine={false} tickLine={false} dy={10} />
+                    <YAxis yAxisId="left" tick={{fontSize: 9, fontWeight: 800}} axisLine={false} tickLine={false} dx={-10} />
+                    <YAxis yAxisId="right" orientation="right" tick={{fontSize: 9, fontWeight: 800}} axisLine={false} tickLine={false} dx={10} />
                     <Tooltip />
-                    <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{fontSize: '10px', fontWeight: 'bold'}} />
-                    <Area yAxisId="left" name="Valeur Stock" dataKey="stockValue" stroke="#2b579a" strokeWidth={4} fill="url(#colorStock)" />
-                    <Bar yAxisId="right" name="Intensité Flux" dataKey="turnover" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={25} />
+                    <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{fontSize: '9px', fontWeight: 'bold'}} />
+                    <Area yAxisId="left" name="Valeur Stock" dataKey="stockValue" stroke="#2b579a" strokeWidth={3} fill="url(#colorStock)" />
+                    <Bar yAxisId="right" name="Intensité Flux" dataKey="turnover" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={20} />
                     <Line yAxisId="right" name="Rotation Tend." dataKey="turnover" stroke="#ef4444" strokeWidth={2} />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -281,45 +289,47 @@ const App: React.FC = () => {
 
   const InventoryView = () => (
     <div className="space-y-6">
-      <div className="bg-white p-6 border rounded-[2.5rem] shadow-sm space-y-6 no-print">
-        <div className="flex flex-col xl:flex-row gap-6 items-center justify-between">
-          <div className="relative flex-1 min-w-[300px]">
+      <div className="bg-white p-4 lg:p-6 border rounded-[1.5rem] lg:rounded-[2.5rem] shadow-sm space-y-4 lg:space-y-6 no-print">
+        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+          <div className="relative w-full lg:flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder="Filtrer l'inventaire..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-emerald-500 transition-all font-bold" />
+            <input type="text" placeholder="Filtrer l'inventaire..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-6 py-3 lg:py-4 bg-slate-50 border border-slate-200 rounded-xl lg:rounded-2xl text-sm outline-none focus:border-emerald-500 transition-all font-bold" />
           </div>
-          <div className="flex flex-wrap gap-3">
-            <button onClick={() => window.print()} className="px-6 py-4 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-3 hover:bg-black transition-all shadow-lg"><Printer className="w-5 h-5" /> Imprimer</button>
-            <button onClick={() => exportCSV(products, 'SmartStock_Inventaire')} className="px-6 py-4 bg-emerald-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-3 hover:bg-emerald-800 shadow-lg transition-all"><Download className="w-5 h-5" /> CSV</button>
-            <button onClick={() => { setEditingProduct(null); setFormData({ currency: 'Fc', siteId: sites[0].id }); setIsProductModalOpen(true); }} className="px-6 py-4 bg-white border-2 border-slate-200 text-slate-900 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-3 hover:bg-slate-50 transition-all"><Plus className="w-4 h-4" /> Nouveau</button>
+          <div className="flex flex-wrap gap-2 lg:gap-3 w-full lg:w-auto">
+            <button onClick={() => window.print()} className="flex-1 lg:flex-none px-4 lg:px-6 py-3 lg:py-4 bg-slate-900 text-white rounded-xl lg:rounded-2xl text-[10px] lg:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-black transition-all shadow-lg"><Printer className="w-4 h-4" /> Imprimer</button>
+            <button onClick={() => exportCSV(products, 'SmartStock_Inventaire')} className="flex-1 lg:flex-none px-4 lg:px-6 py-3 lg:py-4 bg-emerald-700 text-white rounded-xl lg:rounded-2xl text-[10px] lg:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-800 shadow-lg transition-all"><Download className="w-4 h-4" /> CSV</button>
+            <button onClick={() => { setEditingProduct(null); setFormData({ currency: 'Fc', siteId: sites[0].id }); setIsProductModalOpen(true); }} className="w-full lg:flex-none px-4 lg:px-6 py-3 lg:py-4 bg-white border-2 border-slate-200 text-slate-900 rounded-xl lg:rounded-2xl text-[10px] lg:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"><Plus className="w-4 h-4" /> Nouveau</button>
           </div>
         </div>
       </div>
-      <div className="bg-white border rounded-[3rem] overflow-hidden shadow-sm">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-slate-50 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b">
-              <th className="px-10 py-6">Désignation</th>
-              <th className="px-6 py-6 text-center">Stock</th>
-              <th className="px-6 py-6 text-center">P.U.</th>
-              <th className="px-6 py-6 text-center">Valeur</th>
-              <th className="px-10 py-6 text-right no-print">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="text-xs">
-            {filteredAndSortedProducts.map(p => (
-              <tr key={p.id} className="border-b last:border-0 hover:bg-slate-50/70 transition-colors">
-                <td className="px-10 py-6 font-black text-slate-900 uppercase text-sm">{p.name} <span className="text-[9px] text-emerald-600 block">{p.category}</span></td>
-                <td className="px-6 py-6 text-center font-black text-base">{p.currentStock} <span className="text-[9px] text-slate-400">{p.unit}</span></td>
-                <td className="px-6 py-6 text-center font-bold text-slate-600">{p.unitPrice.toLocaleString()} {p.currency}</td>
-                <td className="px-6 py-6 text-center font-black">{(p.currentStock * p.unitPrice).toLocaleString()} {p.currency}</td>
-                <td className="px-10 py-6 text-right no-print">
-                  <button onClick={()=>{setEditingProduct(p); setFormData(p); setIsProductModalOpen(true);}} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl mr-2"><Edit2 className="w-4 h-4" /></button>
-                  <button onClick={()=>setProducts(products.filter(item=>item.id!==p.id))} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl"><Trash2 className="w-4 h-4" /></button>
-                </td>
+      <div className="bg-white border rounded-[1.5rem] lg:rounded-[3rem] overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-[600px]">
+            <thead>
+              <tr className="bg-slate-50 text-[9px] lg:text-[10px] font-black text-slate-500 uppercase tracking-widest border-b">
+                <th className="px-6 lg:px-10 py-4 lg:py-6">Désignation</th>
+                <th className="px-4 lg:px-6 py-4 lg:py-6 text-center">Stock</th>
+                <th className="px-4 lg:px-6 py-4 lg:py-6 text-center">P.U.</th>
+                <th className="px-4 lg:px-6 py-4 lg:py-6 text-center">Valeur</th>
+                <th className="px-6 lg:px-10 py-4 lg:py-6 text-right no-print">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="text-[11px] lg:text-xs">
+              {filteredAndSortedProducts.map(p => (
+                <tr key={p.id} className="border-b last:border-0 hover:bg-slate-50/70 transition-colors">
+                  <td className="px-6 lg:px-10 py-4 lg:py-6 font-black text-slate-900 uppercase text-xs lg:text-sm">{p.name} <span className="text-[8px] lg:text-[9px] text-emerald-600 block">{p.category}</span></td>
+                  <td className="px-4 lg:px-6 py-4 lg:py-6 text-center font-black text-sm lg:text-base">{p.currentStock} <span className="text-[8px] lg:text-[9px] text-slate-400">{p.unit}</span></td>
+                  <td className="px-4 lg:px-6 py-4 lg:py-6 text-center font-bold text-slate-600">{p.unitPrice.toLocaleString()} {p.currency}</td>
+                  <td className="px-4 lg:px-6 py-4 lg:py-6 text-center font-black">{(p.currentStock * p.unitPrice).toLocaleString()} {p.currency}</td>
+                  <td className="px-6 lg:px-10 py-4 lg:py-6 text-right no-print">
+                    <button onClick={()=>{setEditingProduct(p); setFormData(p); setIsProductModalOpen(true);}} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl mr-1 lg:mr-2"><Edit2 className="w-3 h-3 lg:w-4 lg:h-4" /></button>
+                    <button onClick={()=>setProducts(products.filter(item=>item.id!==p.id))} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl"><Trash2 className="w-3 h-3 lg:w-4 lg:h-4" /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -327,25 +337,25 @@ const App: React.FC = () => {
   const ReplenishmentView = () => {
     const need = products.filter(p => p.currentStock <= p.minStock);
     return (
-      <div className="space-y-8 pb-24">
-        <div className="bg-white p-12 border rounded-[3.5rem] shadow-sm flex flex-col md:flex-row justify-between items-center gap-8">
-           <div className="flex items-center gap-6">
-              <div className="p-4 bg-emerald-600 text-white rounded-3xl"><Calculator className="w-8 h-8" /></div>
-              <div><h3 className="text-2xl font-black uppercase italic tracking-tighter">Besoins Critiques</h3><p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">{need.length} références à réapprovisionner</p></div>
+      <div className="space-y-6 lg:space-y-8 pb-24">
+        <div className="bg-white p-6 lg:p-12 border rounded-[2rem] lg:rounded-[3.5rem] shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 lg:gap-8">
+           <div className="flex items-center gap-4 lg:gap-6 w-full lg:w-auto">
+              <div className="p-3 lg:p-4 bg-emerald-600 text-white rounded-2xl lg:rounded-3xl"><Calculator className="w-6 h-6 lg:w-8 lg:h-8" /></div>
+              <div><h3 className="text-xl lg:text-2xl font-black uppercase italic tracking-tighter">Besoins Critiques</h3><p className="text-[9px] lg:text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">{need.length} références à réapprovisionner</p></div>
            </div>
-           <button onClick={handleFetchAiInsights} disabled={isAiLoading} className="px-10 py-5 bg-slate-900 text-white rounded-3xl font-black uppercase text-[11px] flex items-center gap-4 hover:bg-black transition-all disabled:opacity-50 shadow-2xl">
+           <button onClick={handleFetchAiInsights} disabled={isAiLoading} className="w-full lg:w-auto px-6 lg:px-10 py-4 lg:py-5 bg-slate-900 text-white rounded-2xl lg:rounded-3xl font-black uppercase text-[10px] lg:text-[11px] flex items-center justify-center gap-3 lg:gap-4 hover:bg-black transition-all disabled:opacity-50 shadow-xl">
               {isAiLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5 text-emerald-400" />} Diagnostic IA Logistique
            </button>
         </div>
-        {aiInsights && <div className="p-12 bg-slate-900 text-slate-100 rounded-[3.5rem] shadow-2xl animate-in zoom-in duration-500 italic text-sm leading-relaxed whitespace-pre-wrap"><Sparkles className="w-6 h-6 text-emerald-400 mb-6" />{aiInsights}</div>}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {aiInsights && <div className="p-6 lg:p-12 bg-slate-900 text-slate-100 rounded-[2rem] lg:rounded-[3.5rem] shadow-xl animate-in zoom-in duration-500 italic text-xs lg:text-sm leading-relaxed whitespace-pre-wrap"><Sparkles className="w-5 h-5 lg:w-6 lg:h-6 text-emerald-400 mb-4 lg:mb-6" />{aiInsights}</div>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 lg:gap-6">
            {need.map(p => (
-             <div key={p.id} className="p-10 bg-white border-2 border-rose-100 rounded-[3rem] shadow-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50 rounded-full -mr-16 -mt-16 group-hover:scale-110 transition-transform" />
-                <h4 className="font-black text-slate-900 uppercase tracking-tight text-lg mb-4 relative z-10">{p.name}</h4>
+             <div key={p.id} className="p-6 lg:p-10 bg-white border-2 border-rose-100 rounded-[2rem] lg:rounded-[3rem] shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 lg:w-32 h-24 lg:h-32 bg-rose-50 rounded-full -mr-12 lg:-mr-16 -mt-12 lg:-mt-16 group-hover:scale-110 transition-transform" />
+                <h4 className="font-black text-slate-900 uppercase tracking-tight text-base lg:text-lg mb-3 lg:mb-4 relative z-10">{p.name}</h4>
                 <div className="flex justify-between items-end relative z-10">
-                   <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">À commander</p><p className="text-3xl font-black text-rose-600">{p.monthlyNeed - p.currentStock} <span className="text-xs">{p.unit}</span></p></div>
-                   <div className="text-right font-bold text-slate-400 italic text-xs">Seuil: {p.minStock}</div>
+                   <div><p className="text-[8px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest">À commander</p><p className="text-2xl lg:text-3xl font-black text-rose-600">{p.monthlyNeed - p.currentStock} <span className="text-[10px] lg:text-xs">{p.unit}</span></p></div>
+                   <div className="text-right font-bold text-slate-400 italic text-[10px] lg:text-xs">Seuil: {p.minStock}</div>
                 </div>
              </div>
            ))}
@@ -376,18 +386,6 @@ const App: React.FC = () => {
       logs.filter(l => l.type === 'exit').forEach(l => {
         consumption[l.productName] = (consumption[l.productName] || 0) + Math.abs(l.changeAmount);
       });
-      const topConsumption = Object.entries(consumption)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5);
-
-      const losses: Record<string, number> = {};
-      logs.filter(l => l.type === 'adjustment' && l.changeAmount < 0).forEach(l => {
-        const p = products.find(prod => prod.id === l.productId);
-        losses[l.productName] = (losses[l.productName] || 0) + (Math.abs(l.changeAmount) * (p ? p.unitPrice : 0));
-      });
-      const topLosses = Object.entries(losses)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5);
 
       const siteStats = sites.map(site => {
         const siteProds = products.filter(p => p.siteId === site.id);
@@ -406,7 +404,7 @@ const App: React.FC = () => {
         return { name: site.name, expense: exp, outputVolume: exits, ruptureRate };
       });
 
-      return { totalExpense, residualValue, topConsumption, topLosses, siteStats };
+      return { totalExpense, residualValue, siteStats };
     }, [history, products, sites, currentMonth, currentYear]);
 
     const globalHealth = useMemo(() => {
@@ -418,7 +416,7 @@ const App: React.FC = () => {
     }, [products]);
 
     return (
-      <div className="space-y-12 pb-24 max-w-5xl mx-auto print:p-0 print:m-0">
+      <div className="space-y-8 lg:space-y-12 pb-24 max-w-5xl mx-auto print:p-0 print:m-0">
         <div className="hidden print:flex justify-between items-center border-b-4 border-[#004a23] pb-8 mb-12">
            <div className="flex items-center gap-4">
              <div className="bg-[#004a23] p-4 rounded-2xl"><FileSpreadsheet className="w-10 h-10 text-white" /></div>
@@ -433,117 +431,87 @@ const App: React.FC = () => {
            </div>
         </div>
 
-        <div className="flex justify-between items-center no-print mb-8">
-           <h3 className="text-2xl font-black uppercase italic tracking-tighter flex items-center gap-4"><FileText className="w-8 h-8 text-emerald-600" /> Structure du Rapport Automatisé</h3>
-           <button onClick={() => window.print()} className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-3 hover:bg-black shadow-lg transition-all"><Printer className="w-5 h-5" /> Générer PDF / Imprimer</button>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center no-print mb-8 gap-4">
+           <h3 className="text-xl lg:text-2xl font-black uppercase italic tracking-tighter flex items-center gap-3 lg:gap-4"><FileText className="w-6 h-6 lg:w-8 lg:h-8 text-emerald-600" /> Structure du Rapport Automatisé</h3>
+           <button onClick={() => window.print()} className="w-full sm:w-auto px-6 lg:px-8 py-3 lg:py-4 bg-slate-900 text-white rounded-xl lg:rounded-2xl text-[10px] lg:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 lg:gap-3 hover:bg-black shadow-lg transition-all"><Printer className="w-4 h-4 lg:w-5 lg:h-5" /> Imprimer</button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-           <div className="bg-white p-10 border-2 rounded-[3rem] shadow-sm relative overflow-hidden">
-             <div className="p-4 bg-blue-50 text-blue-600 rounded-3xl w-max mb-6"><DollarSign className="w-6 h-6" /></div>
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Dépense Totale du Mois</p>
-             <h4 className="text-3xl font-black text-slate-900 tabular-nums italic">{monthStats.totalExpense.toLocaleString()} Fc</h4>
-             <div className="mt-4 flex items-center gap-2 text-rose-500 font-bold text-xs uppercase"><TrendingUp className="w-4 h-4" /> 12% vs mois préc.</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-8">
+           <div className="bg-white p-6 lg:p-10 border-2 rounded-[2rem] lg:rounded-[3rem] shadow-sm relative overflow-hidden">
+             <div className="p-3 lg:p-4 bg-blue-50 text-blue-600 rounded-2xl lg:rounded-3xl w-max mb-4 lg:mb-6"><DollarSign className="w-5 h-5 lg:w-6 lg:h-6" /></div>
+             <p className="text-[9px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Dépense Totale du Mois</p>
+             <h4 className="text-2xl lg:text-3xl font-black text-slate-900 tabular-nums italic">{monthStats.totalExpense.toLocaleString()} Fc</h4>
            </div>
-           <div className="bg-white p-10 border-2 rounded-[3rem] shadow-sm">
-             <div className="p-4 bg-emerald-50 text-emerald-600 rounded-3xl w-max mb-6"><HardDriveDownload className="w-6 h-6" /></div>
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Valeur du Stock Résiduel</p>
-             <h4 className="text-3xl font-black text-slate-900 tabular-nums italic">{monthStats.residualValue.toLocaleString()} Fc</h4>
-             <p className="mt-4 text-[10px] font-bold text-slate-400 uppercase italic">Actif immobilisé en magasin</p>
+           <div className="bg-white p-6 lg:p-10 border-2 rounded-[2rem] lg:rounded-[3rem] shadow-sm">
+             <div className="p-3 lg:p-4 bg-emerald-50 text-emerald-600 rounded-2xl lg:rounded-3xl w-max mb-4 lg:mb-6"><HardDriveDownload className="w-5 h-5 lg:w-6 lg:h-6" /></div>
+             <p className="text-[9px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Valeur du Stock Résiduel</p>
+             <h4 className="text-2xl lg:text-3xl font-black text-slate-900 tabular-nums italic">{monthStats.residualValue.toLocaleString()} Fc</h4>
            </div>
-           <div className="bg-white p-10 border-2 rounded-[3rem] shadow-sm flex flex-col justify-between">
-             <div className="p-4 bg-slate-50 text-slate-600 rounded-3xl w-max mb-6"><Activity className="w-6 h-6" /></div>
+           <div className="bg-white p-6 lg:p-10 border-2 rounded-[2rem] lg:rounded-[3rem] shadow-sm flex flex-col justify-between">
+             <div className="p-3 lg:p-4 bg-slate-50 text-slate-600 rounded-2xl lg:rounded-3xl w-max mb-4 lg:mb-6"><Activity className="w-5 h-5 lg:w-6 lg:h-6" /></div>
              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">État de Santé Global</p>
-             <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-full shadow-inner flex items-center justify-center ${globalHealth === 'GREEN' ? 'bg-emerald-500' : globalHealth === 'ORANGE' ? 'bg-amber-500' : 'bg-rose-500'}`}><div className="w-4 h-4 bg-white/20 rounded-full animate-pulse" /></div>
-                <span className={`text-sm font-black uppercase italic ${globalHealth === 'GREEN' ? 'text-emerald-600' : globalHealth === 'ORANGE' ? 'text-amber-600' : 'text-rose-600'}`}>{globalHealth === 'GREEN' ? 'Stock Sain' : globalHealth === 'ORANGE' ? 'Vigilance' : 'Alerte Critique'}</span>
+             <div className="flex items-center gap-3 lg:gap-4">
+                <div className={`w-10 lg:w-12 h-10 lg:h-12 rounded-full flex items-center justify-center ${globalHealth === 'GREEN' ? 'bg-emerald-500' : globalHealth === 'ORANGE' ? 'bg-amber-500' : 'bg-rose-500'}`}><div className="w-3 lg:w-4 h-3 lg:h-4 bg-white/20 rounded-full animate-pulse" /></div>
+                <span className={`text-xs lg:text-sm font-black uppercase italic ${globalHealth === 'GREEN' ? 'text-emerald-600' : globalHealth === 'ORANGE' ? 'text-amber-600' : 'text-rose-600'}`}>{globalHealth === 'GREEN' ? 'Stock Sain' : globalHealth === 'ORANGE' ? 'Vigilance' : 'Alerte Critique'}</span>
              </div>
            </div>
         </div>
 
-        <div className="bg-white border-2 rounded-[3.5rem] shadow-sm overflow-hidden p-12">
-           <h4 className="text-lg font-black uppercase tracking-[0.25em] mb-10 flex items-center gap-4"><Building2 className="w-5 h-5 text-blue-600" /> Performance par Site (Comparatif)</h4>
+        <div className="bg-white border-2 rounded-[2rem] lg:rounded-[3.5rem] shadow-sm overflow-hidden p-6 lg:p-12">
+           <h4 className="text-base lg:text-lg font-black uppercase tracking-[0.2em] mb-8 lg:mb-10 flex items-center gap-3 lg:gap-4"><Building2 className="w-5 h-5 text-blue-600" /> Performance par Site</h4>
            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead><tr className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest"><th className="px-8 py-4">Site</th><th className="px-6 py-4 text-center">Total Dépenses</th><th className="px-6 py-4 text-center">Volume Sorties</th><th className="px-6 py-4 text-right">Taux de Rupture</th></tr></thead>
-                <tbody className="text-xs">{monthStats.siteStats.map((s, i) => (<tr key={i} className="border-b last:border-0 hover:bg-slate-50 transition-colors"><td className="px-8 py-6 font-black text-slate-900 uppercase">{s.name}</td><td className="px-6 py-6 text-center font-bold text-slate-600">{s.expense.toLocaleString()} Fc</td><td className="px-6 py-6 text-center font-black">{s.outputVolume} articles</td><td className="px-6 py-6 text-right font-black"><span className={`px-4 py-2 rounded-full text-[10px] border-2 ${s.ruptureRate > 10 ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}>{s.ruptureRate.toFixed(1)}% {s.ruptureRate > 10 ? '(Alerte)' : ''}</span></td></tr>))}</tbody>
+              <table className="w-full text-left min-w-[500px]">
+                <thead><tr className="bg-slate-50 border-b text-[9px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest"><th className="px-6 py-4">Site</th><th className="px-4 py-4 text-center">Dépenses</th><th className="px-4 py-4 text-center">Sorties</th><th className="px-4 py-4 text-right">Rupture</th></tr></thead>
+                <tbody className="text-xs">{monthStats.siteStats.map((s, i) => (<tr key={i} className="border-b last:border-0 hover:bg-slate-50 transition-colors"><td className="px-6 py-4 lg:py-6 font-black text-slate-900 uppercase">{s.name}</td><td className="px-4 py-4 lg:py-6 text-center font-bold text-slate-600">{s.expense.toLocaleString()} Fc</td><td className="px-4 py-4 lg:py-6 text-center font-black">{s.outputVolume} art.</td><td className="px-4 py-4 lg:py-6 text-right font-black"><span className={`px-2 lg:px-4 py-1 lg:py-2 rounded-full text-[8px] lg:text-[10px] border ${s.ruptureRate > 10 ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}>{s.ruptureRate.toFixed(1)}%</span></td></tr>))}</tbody>
               </table>
            </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-           <div className="bg-white border-2 rounded-[3.5rem] shadow-sm p-12">
-              <h4 className="text-md font-black uppercase tracking-widest mb-10 flex items-center gap-4"><TrendingUp className="w-5 h-5 text-emerald-600" /> Les Plus Consommés</h4>
-              <div className="space-y-6">{monthStats.topConsumption.map(([name, qty], i) => (<div key={i} className="flex flex-col gap-2"><div className="flex justify-between text-[11px] font-black uppercase italic"><span className="text-slate-900">{name}</span><span className="text-emerald-600">{qty} unités</span></div><div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(qty / monthStats.topConsumption[0][1]) * 100}%` }} /></div></div>))}</div>
-           </div>
-           <div className="bg-white border-2 rounded-[3.5rem] shadow-sm p-12">
-              <h4 className="text-md font-black uppercase tracking-widest mb-10 flex items-center gap-4"><TrendingDown className="w-5 h-5 text-rose-600" /> Les Plus Grosses Pertes</h4>
-              <div className="space-y-6">{monthStats.topLosses.map(([name, val], i) => (<div key={i} className="flex flex-col gap-2"><div className="flex justify-between text-[11px] font-black uppercase italic"><span className="text-slate-900">{name}</span><span className="text-rose-600">{val.toLocaleString()} Fc</span></div><div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-rose-500 rounded-full" style={{ width: `${(val / (monthStats.topLosses[0]?.[1] || 1)) * 100}%` }} /></div></div>))}</div>
-           </div>
-        </div>
-
-        <div className="hidden print:grid grid-cols-2 gap-20 pt-24 mt-24">
-           <div className="border-t-2 border-slate-900 pt-8 text-center"><p className="text-xs font-black uppercase tracking-widest">Le Responsable Stock</p><div className="h-24" /><p className="text-[10px] font-bold text-slate-400">Signature & Cachet</p></div>
-           <div className="border-t-2 border-slate-900 pt-8 text-center"><p className="text-xs font-black uppercase tracking-widest">Le Directeur Logistique</p><div className="h-24" /><p className="text-[10px] font-bold text-slate-400">Signature & Cachet</p></div>
-        </div>
       </div>
     );
   };
 
-  const SettingsView = () => {
-    const [newSup, setNewSup] = useState('');
-    return (
-      <div className="max-w-6xl mx-auto space-y-12 pb-24">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Section Centre d'Exportation */}
-          <div className="bg-white border rounded-[3rem] p-12 shadow-sm space-y-8 md:col-span-2">
-            <div className="flex items-center gap-6"><div className="p-4 bg-emerald-700 text-white rounded-2xl"><FileDown className="w-8 h-8" /></div><div><h3 className="text-2xl font-black uppercase italic tracking-tighter">Centre d'Exportation</h3><p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Extraire les données et rapports légaux</p></div></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-               <button onClick={() => exportCSV(products, 'SmartStock_Inventaire')} className="p-8 bg-slate-50 border-2 rounded-[2.5rem] flex flex-col items-center gap-4 hover:border-emerald-500 hover:bg-white transition-all group">
-                  <FileSpreadsheet className="w-10 h-10 text-emerald-600 group-hover:scale-110 transition-transform" />
-                  <div className="text-center"><p className="text-xs font-black uppercase">Inventaire (.CSV)</p><p className="text-[9px] font-bold text-slate-400">Tableau Excel exploitable</p></div>
-               </button>
-               <button onClick={() => { setActiveView('monthly_report'); setTimeout(() => window.print(), 500); }} className="p-8 bg-slate-50 border-2 rounded-[2.5rem] flex flex-col items-center gap-4 hover:border-rose-500 hover:bg-white transition-all group">
-                  <Printer className="w-10 h-10 text-rose-600 group-hover:scale-110 transition-transform" />
-                  <div className="text-center"><p className="text-xs font-black uppercase">Rapport Global (.PDF)</p><p className="text-[9px] font-bold text-slate-400">Synthèse mensuelle imprimable</p></div>
-               </button>
-               <button onClick={() => exportCSV(products.filter(p=>p.currentStock<=p.minStock), 'SmartStock_Besoins')} className="p-8 bg-slate-50 border-2 rounded-[2.5rem] flex flex-col items-center gap-4 hover:border-amber-500 hover:bg-white transition-all group">
-                  <FileType className="w-10 h-10 text-amber-600 group-hover:scale-110 transition-transform" />
-                  <div className="text-center"><p className="text-xs font-black uppercase">Liste Besoins (.CSV)</p><p className="text-[9px] font-bold text-slate-400">Articles sous seuil critique</p></div>
-               </button>
-            </div>
+  const SettingsView = () => (
+    <div className="max-w-6xl mx-auto space-y-8 lg:space-y-12 pb-24">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-12">
+        <div className="bg-white border rounded-[1.5rem] lg:rounded-[3rem] p-6 lg:p-12 shadow-sm space-y-6 lg:space-y-8 md:col-span-2">
+          <div className="flex items-center gap-4 lg:gap-6"><div className="p-3 lg:p-4 bg-emerald-700 text-white rounded-xl lg:rounded-2xl"><FileDown className="w-6 h-6 lg:w-8 lg:h-8" /></div><div><h3 className="text-xl lg:text-2xl font-black uppercase italic tracking-tighter">Centre d'Exportation</h3><p className="text-[9px] lg:text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Extraire les données et rapports légaux</p></div></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 lg:gap-6">
+             <button onClick={() => exportCSV(products, 'SmartStock_Inventaire')} className="p-6 lg:p-8 bg-slate-50 border-2 rounded-[1.5rem] lg:rounded-[2.5rem] flex flex-col items-center gap-3 lg:gap-4 hover:border-emerald-500 hover:bg-white transition-all group">
+                <FileSpreadsheet className="w-8 h-8 lg:w-10 lg:h-10 text-emerald-600 group-hover:scale-110 transition-transform" />
+                <div className="text-center"><p className="text-[10px] lg:text-xs font-black uppercase">Inventaire (.CSV)</p></div>
+             </button>
+             <button onClick={() => { setActiveView('monthly_report'); setTimeout(() => window.print(), 500); }} className="p-8 bg-slate-50 border-2 rounded-[1.5rem] lg:rounded-[2.5rem] flex flex-col items-center gap-3 lg:gap-4 hover:border-rose-500 hover:bg-white transition-all group">
+                <Printer className="w-8 h-8 lg:w-10 lg:h-10 text-rose-600 group-hover:scale-110 transition-transform" />
+                <div className="text-center"><p className="text-[10px] lg:text-xs font-black uppercase">Rapport Global (.PDF)</p></div>
+             </button>
+             <button onClick={() => exportCSV(products.filter(p=>p.currentStock<=p.minStock), 'SmartStock_Besoins')} className="p-6 lg:p-8 bg-slate-50 border-2 rounded-[1.5rem] lg:rounded-[2.5rem] flex flex-col items-center gap-3 lg:gap-4 hover:border-amber-500 hover:bg-white transition-all group">
+                <FileType className="w-8 h-8 lg:w-10 lg:h-10 text-amber-600 group-hover:scale-110 transition-transform" />
+                <div className="text-center"><p className="text-[10px] lg:text-xs font-black uppercase">Liste Besoins (.CSV)</p></div>
+             </button>
           </div>
+        </div>
 
-          <div className="bg-white border rounded-[3rem] p-12 shadow-sm flex flex-col justify-between">
-            <div className="flex items-center gap-6 mb-8"><div className="p-4 bg-emerald-700 text-white rounded-2xl"><FileUp className="w-8 h-8" /></div><div><h3 className="text-2xl font-black uppercase italic tracking-tighter">Importation IA</h3><p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Excel/CSV structuré par Gemini</p></div></div>
-            <div className="border-4 border-dashed border-slate-100 rounded-[3rem] p-10 text-center bg-slate-50/30 hover:border-emerald-200 transition-all group relative h-48 flex flex-col items-center justify-center gap-4">
-               <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv, .xlsx, .xls, .txt" className="absolute inset-0 opacity-0 cursor-pointer" disabled={isImportLoading} />
-               {isImportLoading ? <Loader2 className="w-10 h-10 text-emerald-600 animate-spin" /> : <FileSpreadsheet className="w-10 h-10 text-slate-200 group-hover:text-emerald-500 transition-all" />}
-               <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{isImportLoading ? "Analyse IA..." : "Cliquez pour Importer"}</p>
-            </div>
+        <div className="bg-white border rounded-[1.5rem] lg:rounded-[3rem] p-6 lg:p-12 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center gap-4 lg:gap-6 mb-6 lg:mb-8"><div className="p-3 lg:p-4 bg-emerald-700 text-white rounded-xl lg:rounded-2xl"><FileUp className="w-6 h-6 lg:w-8 lg:h-8" /></div><div><h3 className="text-xl lg:text-2xl font-black uppercase italic tracking-tighter">Importation IA</h3></div></div>
+          <div className="border-4 border-dashed border-slate-100 rounded-[1.5rem] lg:rounded-[3rem] p-6 lg:p-10 text-center bg-slate-50/30 hover:border-emerald-200 transition-all group relative h-40 lg:h-48 flex flex-col items-center justify-center gap-4">
+             <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv, .xlsx, .xls, .txt" className="absolute inset-0 opacity-0 cursor-pointer" disabled={isImportLoading} />
+             {isImportLoading ? <Loader2 className="w-8 h-8 lg:w-10 lg:h-10 text-emerald-600 animate-spin" /> : <FileSpreadsheet className="w-8 h-8 lg:w-10 lg:h-10 text-slate-200 group-hover:text-emerald-500 transition-all" />}
+             <p className="text-[10px] lg:text-xs font-black text-slate-900 uppercase tracking-tight">{isImportLoading ? "Analyse..." : "Glisser un fichier"}</p>
           </div>
+        </div>
 
-          <div className="bg-white border rounded-[3rem] p-12 shadow-sm space-y-8">
-            <div className="flex items-center gap-6"><div className="p-4 bg-slate-900 text-white rounded-2xl"><Database className="w-8 h-8" /></div><div><h3 className="text-2xl font-black uppercase italic tracking-tighter">Maintenance</h3><p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Actions critiques Enterprise</p></div></div>
-            <div className="grid grid-cols-2 gap-4">
-              <button onClick={handleSystemBackup} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-200 flex flex-col items-center gap-3 hover:bg-white hover:border-blue-400 transition-all"><HardDriveDownload className="w-8 h-8 text-blue-600" /><span className="text-[9px] font-black uppercase">Backup JSON</span></button>
-              <button onClick={handleGenerateDemo} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-200 flex flex-col items-center gap-3 hover:bg-white hover:border-emerald-400 transition-all"><Sparkles className="w-8 h-8 text-emerald-600" /><span className="text-[9px] font-black uppercase">Générer Démo</span></button>
-              <button onClick={()=>window.location.reload()} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-200 flex flex-col items-center gap-3 hover:bg-white hover:border-amber-400 transition-all"><RotateCcw className="w-8 h-8 text-amber-600" /><span className="text-[9px] font-black uppercase">Re-calcul</span></button>
-              <button onClick={()=>{if(window.confirm("Tout supprimer ?")){localStorage.clear(); window.location.reload();}}} className="p-6 bg-rose-50 rounded-[2rem] border border-rose-100 flex flex-col items-center gap-3 hover:bg-rose-100 hover:border-rose-300 transition-all"><ShieldAlert className="w-8 h-8 text-rose-600" /><span className="text-[9px] font-black uppercase text-rose-700">Factory Reset</span></button>
-            </div>
-          </div>
-          {/* Section Fournisseurs */}
-          <div className="bg-white border rounded-[3rem] p-12 shadow-sm space-y-8 lg:col-span-2">
-            <div className="flex items-center gap-6"><div className="p-4 bg-slate-900 text-white rounded-2xl"><Truck className="w-8 h-8" /></div><div><h3 className="text-2xl font-black uppercase italic tracking-tighter">Fournisseurs Partenaires</h3><p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Répertoire logistique global</p></div></div>
-            <div className="flex flex-wrap gap-4">
-              {suppliers.map((s, i) => ( <div key={i} className="flex items-center gap-4 px-8 py-4 bg-slate-50 border rounded-3xl font-black uppercase text-[10px] text-slate-800">{s}<button onClick={()=>setSuppliers(p=>p.filter(x=>x!==s))} className="text-rose-300 hover:text-rose-600"><X className="w-4 h-4" /></button></div> ))}
-              <div className="flex-1 flex gap-2"><input value={newSup} onChange={e=>setNewSup(e.target.value)} placeholder="Nouveau partenaire..." className="flex-1 p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-xs" /><button onClick={()=>{if(newSup){setSuppliers([...suppliers, newSup]); setNewSup('');}}} className="px-8 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Ajouter</button></div>
-            </div>
+        <div className="bg-white border rounded-[1.5rem] lg:rounded-[3rem] p-6 lg:p-12 shadow-sm space-y-6 lg:space-y-8">
+          <div className="flex items-center gap-4 lg:gap-6"><div className="p-3 lg:p-4 bg-slate-900 text-white rounded-xl lg:rounded-2xl"><Database className="w-6 h-6 lg:w-8 lg:h-8" /></div><div><h3 className="text-xl lg:text-2xl font-black uppercase italic tracking-tighter">Maintenance</h3></div></div>
+          <div className="grid grid-cols-2 gap-3 lg:gap-4">
+            <button onClick={handleSystemBackup} className="p-4 lg:p-6 bg-slate-50 rounded-xl lg:rounded-[2rem] border border-slate-200 flex flex-col items-center gap-2 lg:gap-3 hover:bg-white hover:border-blue-400 transition-all"><HardDriveDownload className="w-6 h-6 lg:w-8 lg:h-8 text-blue-600" /><span className="text-[8px] lg:text-[9px] font-black uppercase">Backup</span></button>
+            <button onClick={handleGenerateDemo} className="p-4 lg:p-6 bg-slate-50 rounded-xl lg:rounded-[2rem] border border-slate-200 flex flex-col items-center gap-2 lg:gap-3 hover:bg-white hover:border-emerald-400 transition-all"><Sparkles className="w-6 h-6 lg:w-8 lg:h-8 text-emerald-600" /><span className="text-[8px] lg:text-[9px] font-black uppercase">Démo</span></button>
+            <button onClick={()=>window.location.reload()} className="p-4 lg:p-6 bg-slate-50 rounded-xl lg:rounded-[2rem] border border-slate-200 flex flex-col items-center gap-2 lg:gap-3 hover:bg-white hover:border-amber-400 transition-all"><RefreshCcw className="w-6 h-6 lg:w-8 lg:h-8 text-amber-600" /><span className="text-[8px] lg:text-[9px] font-black uppercase">Refresh</span></button>
+            <button onClick={()=>{if(window.confirm("Tout supprimer ?")){localStorage.clear(); window.location.reload();}}} className="p-4 lg:p-6 bg-rose-50 rounded-xl lg:rounded-[2rem] border border-rose-100 flex flex-col items-center gap-2 lg:gap-3 hover:bg-rose-100 hover:border-rose-300 transition-all"><ShieldAlert className="w-6 h-6 lg:w-8 lg:h-8 text-rose-600" /><span className="text-[8px] lg:text-[9px] font-black uppercase text-rose-700">Reset</span></button>
           </div>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
 
   if (!isLoggedIn) return (
     <div className="min-h-screen flex bg-white font-sans overflow-hidden">
@@ -551,10 +519,14 @@ const App: React.FC = () => {
         <div><div className="flex items-center gap-5 mb-16"><div className="bg-emerald-500 p-4 rounded-3xl"><FileSpreadsheet className="w-12 h-12 text-white" /></div><h1 className="text-4xl font-black text-white italic tracking-tighter uppercase">SmartStock<span className="text-emerald-400">Pro</span></h1></div><h2 className="text-7xl font-black text-white leading-tight uppercase italic mb-10">Maitrisez<br/>vos flux de<br/><span className="text-emerald-400">A à Z.</span></h2></div>
         <div className="flex gap-8"><div className="bg-white/10 backdrop-blur-xl p-8 rounded-[3rem] flex-1"><ShieldCheck className="w-10 h-10 text-emerald-400 mb-6" /><p className="text-white text-[12px] font-black uppercase tracking-widest">Sécurité Pro</p></div><div className="bg-white/10 backdrop-blur-xl p-8 rounded-[3rem] flex-1"><BarChart3 className="w-10 h-10 text-blue-400 mb-6" /><p className="text-white text-[12px] font-black uppercase tracking-widest">Analyses IA</p></div></div>
       </div>
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-12 bg-slate-50">
-         <form onSubmit={e=>{e.preventDefault(); setIsLoggedIn(true); localStorage.setItem('ss_session', 'active');}} className="w-full max-w-sm space-y-16 text-center">
-           <div><h3 className="text-5xl font-black text-slate-900 tracking-tighter uppercase italic">Connexion</h3><p className="text-slate-400 text-[11px] font-black uppercase tracking-[0.4em] mt-5">Authentification SmartStock</p></div>
-           <div className="space-y-6"><input type="text" placeholder="Identifiant" className="w-full p-6 bg-white border border-slate-200 rounded-[2.5rem] outline-none font-bold" defaultValue="admin" /><input type="password" placeholder="Clé d'Accès" className="w-full p-6 bg-white border border-slate-200 rounded-[2.5rem] outline-none font-bold" defaultValue="admin" /><button className="w-full bg-[#107c41] text-white py-7 rounded-[2.5rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl hover:-translate-y-1 transition-all">Lancer l'Application</button></div>
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 lg:p-12 bg-slate-50">
+         <form onSubmit={e=>{e.preventDefault(); setIsLoggedIn(true); localStorage.setItem('ss_session', 'active');}} className="w-full max-w-sm lg:space-y-16 space-y-12 text-center">
+           <div><h3 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tighter uppercase italic">Connexion</h3><p className="text-slate-400 text-[10px] lg:text-[11px] font-black uppercase tracking-[0.3em] lg:tracking-[0.4em] mt-4 lg:mt-5">Authentification SmartStock</p></div>
+           <div className="space-y-4 lg:space-y-6">
+             <input type="text" placeholder="Identifiant" className="w-full p-5 lg:p-6 bg-white border border-slate-200 rounded-2xl lg:rounded-[2.5rem] outline-none font-bold" defaultValue="admin" />
+             <input type="password" placeholder="Clé d'Accès" className="w-full p-5 lg:p-6 bg-white border border-slate-200 rounded-2xl lg:rounded-[2.5rem] outline-none font-bold" defaultValue="admin" />
+             <button className="w-full bg-[#107c41] text-white py-5 lg:py-7 rounded-2xl lg:rounded-[2.5rem] font-black text-[10px] lg:text-xs uppercase tracking-[0.3em] lg:tracking-[0.4em] shadow-xl hover:-translate-y-1 transition-all">Lancer l'Application</button>
+           </div>
          </form>
       </div>
     </div>
@@ -562,9 +534,15 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f1f3f4] flex text-slate-900 font-sans">
-      <aside className="fixed inset-y-6 left-6 z-[60] w-80 bg-[#004a23] text-white flex flex-col shadow-2xl rounded-[3.5rem] border border-white/10 no-print">
-        <div className="p-12 border-b border-white/5 flex items-center gap-4"><div className="bg-emerald-500 p-3 rounded-2xl"><FileSpreadsheet className="w-7 h-7" /></div><h1 className="text-2xl font-black tracking-tighter uppercase italic leading-none">SmartStock<span className="text-emerald-400">Pro</span></h1></div>
-        <nav className="flex-1 px-8 py-12 space-y-3 overflow-y-auto custom-scrollbar">
+      <aside className={`fixed inset-y-0 left-0 z-[100] w-72 sm:w-80 bg-[#004a23] text-white flex flex-col shadow-2xl transition-transform duration-300 ease-in-out no-print lg:translate-x-0 lg:left-6 lg:inset-y-6 lg:rounded-[3.5rem] ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="p-10 lg:p-12 border-b border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-3 lg:gap-4">
+            <div className="bg-emerald-500 p-2 lg:p-3 rounded-xl lg:rounded-2xl"><FileSpreadsheet className="w-5 h-5 lg:w-7 lg:h-7" /></div>
+            <h1 className="text-xl lg:text-2xl font-black tracking-tighter uppercase italic leading-none">SmartStock<span className="text-emerald-400">Pro</span></h1>
+          </div>
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-2 text-white/50 hover:text-white"><X className="w-6 h-6" /></button>
+        </div>
+        <nav className="flex-1 px-6 lg:px-8 py-8 lg:py-12 lg:space-y-3 space-y-2 overflow-y-auto custom-scrollbar">
           {[
             { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
             { id: 'inventory', label: 'Stocks Actifs', icon: FileSpreadsheet },
@@ -573,20 +551,23 @@ const App: React.FC = () => {
             { id: 'history', label: 'Journal Audit', icon: HistoryIcon },
             { id: 'settings', label: 'Paramètres', icon: SettingsIcon },
           ].map(item => (
-            <button key={item.id} onClick={() => setActiveView(item.id as ViewType)} className={`w-full flex items-center gap-5 px-8 py-6 rounded-[2.5rem] text-[11px] font-black uppercase tracking-[0.25em] transition-all ${activeView === item.id ? 'bg-white text-[#004a23] shadow-2xl scale-105' : 'text-emerald-100/40 hover:bg-white/5 hover:text-white'}`}><item.icon className="w-5 h-5" /> {item.label}</button>
+            <button key={item.id} onClick={() => { setActiveView(item.id as ViewType); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 lg:gap-5 px-6 lg:px-8 py-4 lg:py-6 rounded-2xl lg:rounded-[2.5rem] text-[9px] lg:text-[11px] font-black uppercase tracking-[0.2em] lg:tracking-[0.25em] transition-all ${activeView === item.id ? 'bg-white text-[#004a23] shadow-xl scale-105' : 'text-emerald-100/40 hover:bg-white/5 hover:text-white'}`}><item.icon className="w-4 h-4 lg:w-5 lg:h-5" /> {item.label}</button>
           ))}
         </nav>
-        <div className="p-10 border-t border-white/5"><button onClick={() => setIsLoggedIn(false)} className="w-full flex items-center justify-center gap-4 px-8 py-5 rounded-[2rem] bg-rose-500 text-white text-[11px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all">Déconnexion</button></div>
+        <div className="p-8 lg:p-10 border-t border-white/5"><button onClick={handleLogout} className="w-full flex items-center justify-center gap-3 lg:gap-4 px-6 lg:px-8 py-4 lg:py-5 rounded-xl lg:rounded-[2rem] bg-rose-500 text-white text-[9px] lg:text-[11px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all">Déconnexion</button></div>
       </aside>
 
-      <main className="flex-1 lg:ml-[24rem] p-8 lg:p-16 min-h-screen flex flex-col print:m-0 print:p-0">
-        <header className="flex justify-between items-center mb-16 border-b border-slate-200 pb-12 no-print">
-           <div><h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">{activeView.replace('_', ' ')}</h2><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-4">Enterprise v3.5 • Session Active</p></div>
-           <div className="flex gap-5">
-             <button onClick={()=>window.location.reload()} className="p-5 bg-white border border-slate-200 rounded-[2rem] text-slate-400 hover:text-emerald-700 transition-all shadow-lg"><RefreshCcw className="w-7 h-7" /></button>
-             <div className="hidden sm:flex items-center gap-4 bg-white border border-slate-200 p-3 pr-8 rounded-[2rem] shadow-lg">
-               <div className="w-12 h-12 bg-[#004a23] rounded-2xl flex items-center justify-center text-white font-black text-sm">AD</div>
-               <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-900">ADMIN</span><span className="text-[9px] font-bold text-slate-400">CONNECTÉ</span></div>
+      <main className={`flex-1 flex flex-col min-h-screen transition-all duration-300 lg:ml-[22rem] xl:ml-[24rem] p-6 lg:p-16 print:m-0 print:p-0`}>
+        <header className="flex justify-between items-center mb-8 lg:mb-16 border-b border-slate-200 pb-8 lg:pb-12 no-print">
+           <div className="flex items-center gap-4">
+             <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-3 bg-white border border-slate-200 rounded-xl text-slate-900 shadow-sm"><Menu className="w-6 h-6" /></button>
+             <div><h2 className="text-2xl lg:text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">{activeView.replace('_', ' ')}</h2><p className="hidden sm:block text-[9px] lg:text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2 lg:mt-4">Enterprise v3.5 • Session Active</p></div>
+           </div>
+           <div className="flex gap-3 lg:gap-5">
+             <button onClick={()=>window.location.reload()} className="p-3 lg:p-5 bg-white border border-slate-200 rounded-xl lg:rounded-[2rem] text-slate-400 hover:text-emerald-700 transition-all shadow-md"><RefreshCcw className="w-5 h-5 lg:w-7 lg:h-7" /></button>
+             <div className="hidden sm:flex items-center gap-3 lg:gap-4 bg-white border border-slate-200 p-2 lg:p-3 pr-6 lg:pr-8 rounded-xl lg:rounded-[2rem] shadow-md">
+               <div className="w-8 lg:w-12 h-8 lg:h-12 bg-[#004a23] rounded-lg lg:rounded-2xl flex items-center justify-center text-white font-black text-xs lg:text-sm">AD</div>
+               <div className="flex flex-col"><span className="text-[9px] lg:text-[10px] font-black uppercase text-slate-900 leading-tight">ADMIN</span><span className="text-[8px] lg:text-[9px] font-bold text-slate-400">CONNECTÉ</span></div>
              </div>
            </div>
         </header>
@@ -596,27 +577,54 @@ const App: React.FC = () => {
           {activeView === 'inventory' && <InventoryView />}
           {activeView === 'replenishment' && <ReplenishmentView />}
           {activeView === 'monthly_report' && <MonthlyReportView />}
-          {activeView === 'history' && <div className="p-20 text-center bg-white rounded-[3rem] border"><HistoryIcon className="w-16 h-16 text-slate-100 mx-auto mb-6" /><p className="text-sm font-black text-slate-300 uppercase tracking-widest">Journal d'audit disponible dans les archives</p></div>}
+          {activeView === 'history' && <div className="p-12 lg:p-20 text-center bg-white rounded-[2rem] lg:rounded-[3rem] border shadow-sm"><HistoryIcon className="w-12 h-12 lg:w-16 lg:h-16 text-slate-100 mx-auto mb-6" /><p className="text-[10px] lg:text-sm font-black text-slate-300 uppercase tracking-widest">Journal d'audit disponible dans les archives</p></div>}
           {activeView === 'settings' && <SettingsView />}
         </section>
       </main>
 
+      {/* Modal Produit Rapide */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 no-print">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-3xl" onClick={() => setIsProductModalOpen(false)} />
-          <div className="relative w-full max-w-2xl bg-white rounded-[4rem] shadow-2xl overflow-hidden">
-            <div className="p-12 bg-[#004a23] text-white flex justify-between items-center"><h3 className="text-xl font-black uppercase italic">{editingProduct ? 'Modification' : 'Nouvel Article'}</h3><button onClick={() => setIsProductModalOpen(false)} className="p-4 bg-white/10 rounded-3xl"><X className="w-7 h-7" /></button></div>
-            <form onSubmit={(e) => { e.preventDefault(); if(editingProduct) { setProducts(prev => prev.map(p => p.id === editingProduct.id ? {...p, ...formData} as Product : p)); showToast(`Mise à jour effectuée`, "success"); } else { setProducts(prev => [...prev, { ...formData, id: Date.now().toString(), currentStock: 0, minStock: Number(formData.minStock), monthlyNeed: Number(formData.monthlyNeed) } as Product]); showToast(`Article enregistré`, "success"); } setIsProductModalOpen(false); }} className="p-12 space-y-8">
-              <div className="grid grid-cols-2 gap-8">
-                <div className="col-span-2 space-y-2"><label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Désignation</label><input required value={formData.name || ''} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full p-6 bg-slate-50 border rounded-3xl outline-none font-bold focus:border-emerald-600 transition-all" /></div>
-                <div className="space-y-2"><label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Min. Seuil</label><input type="number" required value={formData.minStock || ''} onChange={e=>setFormData({...formData, minStock: Number(e.target.value)})} className="w-full p-6 bg-slate-50 border rounded-3xl outline-none font-bold focus:border-emerald-600 transition-all" /></div>
-                <div className="space-y-2"><label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Mensuel</label><input type="number" required value={formData.monthlyNeed || ''} onChange={e=>setFormData({...formData, monthlyNeed: Number(e.target.value)})} className="w-full p-6 bg-slate-50 border rounded-3xl outline-none font-bold focus:border-emerald-600 transition-all" /></div>
-                <div className="space-y-2"><label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">P.U.</label><input type="number" step="0.01" required value={formData.unitPrice || ''} onChange={e=>setFormData({...formData, unitPrice: Number(e.target.value)})} className="w-full p-6 bg-slate-50 border rounded-3xl outline-none font-bold focus:border-emerald-600 transition-all" /></div>
-                <div className="space-y-2"><label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Unité</label><input required value={formData.unit || ''} onChange={e=>setFormData({...formData, unit: e.target.value})} className="w-full p-6 bg-slate-50 border rounded-3xl outline-none font-bold focus:border-emerald-600 transition-all" /></div>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 lg:p-8 no-print">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xl" onClick={() => setIsProductModalOpen(false)} />
+          <div className="relative w-full max-w-2xl bg-white rounded-[2rem] lg:rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="p-8 lg:p-12 bg-[#004a23] text-white flex justify-between items-center"><h3 className="text-lg lg:text-xl font-black uppercase italic">{editingProduct ? 'Modification' : 'Nouvel Article'}</h3><button onClick={() => setIsProductModalOpen(false)} className="p-3 lg:p-4 bg-white/10 rounded-2xl lg:rounded-3xl"><X className="w-5 h-5 lg:w-7 lg:h-7" /></button></div>
+            <form onSubmit={(e) => { e.preventDefault(); if(editingProduct) { setProducts(prev => prev.map(p => p.id === editingProduct.id ? {...p, ...formData} as Product : p)); showToast(`Mise à jour effectuée`, "success"); } else { setProducts(prev => [...prev, { ...formData, id: Date.now().toString(), currentStock: 0, minStock: Number(formData.minStock), monthlyNeed: Number(formData.monthlyNeed) } as Product]); showToast(`Article enregistré`, "success"); } setIsProductModalOpen(false); }} className="p-8 lg:p-12 space-y-6 lg:space-y-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-8">
+                <div className="sm:col-span-2 space-y-2"><label className="text-[10px] lg:text-[11px] font-black text-slate-400 uppercase tracking-widest">Désignation</label><input required value={formData.name || ''} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full p-4 lg:p-6 bg-slate-50 border rounded-2xl lg:rounded-3xl outline-none font-bold focus:border-emerald-600 transition-all" /></div>
+                <div className="space-y-2"><label className="text-[10px] lg:text-[11px] font-black text-slate-400 uppercase tracking-widest">Min. Seuil</label><input type="number" required value={formData.minStock || ''} onChange={e=>setFormData({...formData, minStock: Number(e.target.value)})} className="w-full p-4 lg:p-6 bg-slate-50 border rounded-2xl lg:rounded-3xl outline-none font-bold focus:border-emerald-600 transition-all" /></div>
+                <div className="space-y-2"><label className="text-[10px] lg:text-[11px] font-black text-slate-400 uppercase tracking-widest">Mensuel</label><input type="number" required value={formData.monthlyNeed || ''} onChange={e=>setFormData({...formData, monthlyNeed: Number(e.target.value)})} className="w-full p-4 lg:p-6 bg-slate-50 border rounded-2xl lg:rounded-3xl outline-none font-bold focus:border-emerald-600 transition-all" /></div>
+                <div className="space-y-2"><label className="text-[10px] lg:text-[11px] font-black text-slate-400 uppercase tracking-widest">P.U.</label><input type="number" step="0.01" required value={formData.unitPrice || ''} onChange={e=>setFormData({...formData, unitPrice: Number(e.target.value)})} className="w-full p-4 lg:p-6 bg-slate-50 border rounded-2xl lg:rounded-3xl outline-none font-bold focus:border-emerald-600 transition-all" /></div>
+                <div className="space-y-2"><label className="text-[10px] lg:text-[11px] font-black text-slate-400 uppercase tracking-widest">Unité</label><input required value={formData.unit || ''} onChange={e=>setFormData({...formData, unit: e.target.value})} className="w-full p-4 lg:p-6 bg-slate-50 border rounded-2xl lg:rounded-3xl outline-none font-bold focus:border-emerald-600 transition-all" /></div>
               </div>
-              <button className="w-full py-7 bg-emerald-700 text-white rounded-[3rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl hover:-translate-y-1 transition-all"><Save className="w-6 h-6 inline mr-4" /> Enregistrer</button>
+              <button className="w-full py-5 lg:py-7 bg-emerald-700 text-white rounded-[2rem] lg:rounded-[3rem] font-black uppercase text-[10px] lg:text-xs tracking-[0.3em] lg:tracking-[0.4em] shadow-2xl hover:-translate-y-1 transition-all flex items-center justify-center gap-3"><Save className="w-5 h-5" /> Enregistrer</button>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Modal Déconnexion - Confirmation Claire */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 lg:p-8 no-print">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xl transition-all" onClick={() => setIsLogoutModalOpen(false)} />
+          <div className="relative w-full max-w-md bg-white rounded-[2.5rem] lg:rounded-[3.5rem] shadow-2xl overflow-hidden animate-modal p-10 lg:p-14 text-center">
+            <div className="p-6 bg-rose-50 text-rose-500 rounded-full w-max mx-auto mb-8 ring-4 ring-rose-100"><LogOut className="w-10 h-10 lg:w-12 lg:h-12" /></div>
+            <h3 className="text-2xl lg:text-3xl font-black uppercase italic tracking-tighter text-slate-900 mb-4">Confirmer la sortie ?</h3>
+            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-12 italic">Toutes vos modifications non sauvegardées pourraient être perdues.</p>
+            <div className="flex flex-col gap-4">
+               <button onClick={confirmLogout} className="w-full py-5 lg:py-6 bg-rose-600 text-white rounded-2xl lg:rounded-3xl font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] shadow-xl hover:bg-rose-700 hover:scale-[1.02] transition-all">Oui, me déconnecter</button>
+               <button onClick={() => setIsLogoutModalOpen(false)} className="w-full py-5 lg:py-6 bg-slate-100 text-slate-500 rounded-2xl lg:rounded-3xl font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] hover:bg-slate-200 transition-all">Annuler</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notifications Toast */}
+      {notification && (
+        <div className={`fixed bottom-8 right-8 z-[300] p-6 rounded-[2rem] shadow-2xl flex items-center gap-4 animate-in slide-in-from-right-10 duration-500 bg-white border-2 ${notification.type === 'error' ? 'border-rose-200' : 'border-emerald-200'}`}>
+           <div className={`p-2 rounded-full ${notification.type === 'error' ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}`}>
+             {notification.type === 'error' ? <AlertTriangle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+           </div>
+           <p className="text-xs font-black uppercase text-slate-800 italic">{notification.message}</p>
         </div>
       )}
 
@@ -626,7 +634,6 @@ const App: React.FC = () => {
           main { margin: 0 !important; padding: 0 !important; width: 100% !important; background: white !important; } 
           body { background: white !important; } 
           .bg-white, .bg-slate-50 { border-color: #e2e8f0 !important; box-shadow: none !important; } 
-          .rounded-[2.5rem], .rounded-[3rem], .rounded-[3.5rem], .rounded-[4rem] { border-radius: 1.5rem !important; } 
           tr { page-break-inside: avoid; } 
         }
         input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
