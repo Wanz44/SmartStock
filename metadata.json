@@ -1,7 +1,8 @@
 {
   "name": "SmartStock Pro",
-  "description": "Système de gestion de stock intelligent épuré pour entreprise : inventaires, macros d'archivage, rapports PDF et assistant IA logistique.",
+  "description": "Système de gestion de stock automatique épuré pour entreprise : inventaires, macros d'archivage, rapports PDF et assistant logistique automatique.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "microphone"
   ]
 }

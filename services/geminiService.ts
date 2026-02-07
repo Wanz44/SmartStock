@@ -1,66 +1,82 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Product, InventoryLog } from "../types";
+import { Product, InventoryLog, RapportAutomatique } from "../types";
 
-// Always use named parameter for apiKey and get it from process.env.API_KEY
+// Initialisation standard de l'API automatique
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export const getStockInsights = async (products: Product[], history: InventoryLog[]) => {
+export const getProfessionalReport = async (products: Product[], history: InventoryLog[]): Promise<RapportAutomatique> => {
   const prompt = `
-    En tant qu'expert en logistique, analyse cet inventaire :
-    ${JSON.stringify(products, null, 2)}
+    En tant qu'expert en Audit Logistique de classe mondiale pour une multinationale, génère un rapport de performance analytique structuré basé sur ces données :
+    Produits: ${JSON.stringify(products)}
+    Historique: ${JSON.stringify(history.slice(-30))}
     
-    Et l'historique récent :
-    ${JSON.stringify(history.slice(-10), null, 2)}
-    
-    Tâches :
-    1. Identifie les produits en rupture critique.
-    2. Suggère les quantités à commander pour atteindre les objectifs mensuels.
-    3. Prédit si certains produits seront en rupture bientôt basé sur l'historique.
-    
-    Réponds en français avec un ton professionnel et structuré.
+    Le rapport doit être hautement professionnel. Pour chartData, suggère 5 catégories majeures de dépenses ou niveaux de stock basés sur les données.
+    Inclus des données de marché actuelles si pertinent via recherche automatique.
   `;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            summary: { type: Type.STRING, description: "Résumé analytique de haut niveau" },
+            criticalAlerts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Analyse des risques critiques" },
+            recommendations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Plan d'action stratégique" },
+            financialProjection: { type: Type.STRING, description: "Prospective financière détaillée" },
+            chartData: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  label: { type: Type.STRING },
+                  valeur: { type: Type.NUMBER }
+                }
+              }
+            }
+          },
+          required: ["summary", "criticalAlerts", "recommendations", "financialProjection", "chartData"]
+        }
+      }
     });
-    return response.text;
+
+    const report = JSON.parse(response.text || '{}') as RapportAutomatique;
+    report.generatedAt = new Date().toISOString();
+
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (groundingChunks) {
+      report.sources = groundingChunks
+        .filter((chunk: any) => chunk.web)
+        .map((chunk: any) => ({
+          title: chunk.web.title,
+          uri: chunk.web.uri
+        }));
+    }
+
+    return report;
   } catch (error) {
-    console.error("Gemini Error:", error);
-    return "Désolé, je ne peux pas analyser vos stocks pour le moment.";
+    console.error("Erreur Rapport Automatique:", error);
+    throw error;
   }
 };
 
-export const processImportedData = async (rawText: string, existingCategories: string[]) => {
-  const prompt = `
-    Tu es un expert en traitement de données logistiques. Voici un contenu brut issu d'un fichier Excel/CSV :
-    """
-    ${rawText}
-    """
-    
-    Voici les catégories autorisées dans notre système : ${existingCategories.join(", ")}.
-    
-    Tâche : Transforme ce texte en un tableau JSON d'objets "Product". 
-    Pour chaque produit :
-    - "name": nom du produit.
-    - "category": assigne la catégorie la plus logique parmi la liste autorisée.
-    - "currentStock": nombre (0 si non trouvé).
-    - "minStock": nombre (défaut 10).
-    - "monthlyNeed": nombre (défaut 10).
-    - "unit": string (ex: 'unités', 'kg', 'sacs').
-    - "unitPrice": nombre.
-    - "currency": '$' ou 'Fc'.
-    - "supplier": nom du fournisseur si détecté.
-    
-    RETOURNE UNIQUEMENT LE JSON PUR (TABLEAU D'OBJETS).
-  `;
-
+export const extractDataFromImage = async (base64Image: string): Promise<Partial<Product>[]> => {
+  const prompt = "Extrait tous les articles d'inventaire visibles, leurs quantités et prix de cette image. Retourne un tableau JSON d'objets Product avec les propriétés : name, currentStock, unitPrice, category, unit.";
+  
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: prompt,
+      contents: {
+        parts: [
+          { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
+          { text: prompt }
+        ]
+      },
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -69,25 +85,37 @@ export const processImportedData = async (rawText: string, existingCategories: s
             type: Type.OBJECT,
             properties: {
               name: { type: Type.STRING },
-              category: { type: Type.STRING },
               currentStock: { type: Type.NUMBER },
-              minStock: { type: Type.NUMBER },
-              monthlyNeed: { type: Type.NUMBER },
-              unit: { type: Type.STRING },
               unitPrice: { type: Type.NUMBER },
-              currency: { type: Type.STRING },
-              supplier: { type: Type.STRING },
-            },
-            required: ["name", "category", "currentStock"]
+              category: { type: Type.STRING },
+              unit: { type: Type.STRING }
+            }
           }
         }
       }
     });
-    
-    const text = response.text || "[]";
-    return JSON.parse(text.trim()) as Partial<Product>[];
+    return JSON.parse(response.text || '[]');
   } catch (error) {
-    console.error("AI Import Error:", error);
-    throw new Error("L'IA n'a pas pu structurer les données. Vérifiez le format du fichier.");
+    console.error("Erreur Extraction Automatique:", error);
+    return [];
   }
+};
+
+export const generateProductImage = async (description: string, size: "1K" | "2K" | "4K" = "1K") => {
+  const proAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  const response = await proAi.models.generateContent({
+    model: 'gemini-3-pro-image-preview',
+    contents: { parts: [{ text: `Photographie de produit professionnelle de : ${description}, fond blanc propre, éclairage de studio.` }] },
+    config: {
+      imageConfig: { aspectRatio: "1:1", imageSize: size }
+    }
+  });
+  
+  for (const part of response.candidates[0].content.parts) {
+    if (part.inlineData) {
+      return `data:image/png;base64,${part.inlineData.data}`;
+    }
+  }
+  return null;
 };

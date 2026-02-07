@@ -1,5 +1,5 @@
 
-import { Product } from './types';
+import { Product, Furniture } from './types';
 
 export const INITIAL_PRODUCTS: Product[] = [
   {
@@ -74,11 +74,54 @@ export const INITIAL_PRODUCTS: Product[] = [
   }
 ];
 
+export const INITIAL_FURNITURE: Furniture[] = [
+  {
+    id: 'f1',
+    code: 'AST-2024-001',
+    name: 'Bureau Ergonomique Pro',
+    siteId: 'S1',
+    currentCount: 12,
+    previousCount: 12,
+    condition: 'Neuf',
+    lastChecked: new Date().toISOString(),
+    assignedTo: 'Département RH',
+    purchasePrice: 450000,
+    purchaseDate: '2024-01-15'
+  },
+  {
+    id: 'f2',
+    code: 'AST-2024-045',
+    name: 'Chaise de Bureau Mesh',
+    siteId: 'S1',
+    currentCount: 45,
+    previousCount: 48,
+    condition: 'Bon',
+    lastChecked: new Date().toISOString(),
+    assignedTo: 'Open Space A',
+    purchasePrice: 120000,
+    purchaseDate: '2023-11-20'
+  },
+  {
+    id: 'f3',
+    code: 'IT-SRV-001',
+    name: 'Serveur Rack 2U Dell',
+    siteId: 'S2',
+    currentCount: 2,
+    previousCount: 2,
+    condition: 'Neuf',
+    lastChecked: new Date().toISOString(),
+    assignedTo: 'Salle Serveur',
+    purchasePrice: 8500000,
+    purchaseDate: '2024-02-10'
+  }
+];
+
 export const INITIAL_CATEGORIES = [
   "Alimentaire",
   "Boisson",
   "Matériel",
   "Mobilier",
   "Décoration",
+  "Informatique",
   "Autre"
 ];
