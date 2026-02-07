@@ -66,6 +66,8 @@ const App: React.FC = () => {
 
   // Confirmation Modals
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<Product | null>(null);
 
   // Settings States
   const [settingsToggles, setSettingsToggles] = useState({
@@ -418,10 +420,8 @@ const App: React.FC = () => {
                   <td className="px-10 py-6 text-right space-x-2">
                     <button onClick={() => {setEditingItem(p); setIsProductModalOpen(true);}} className="p-3 text-blue-500 hover:bg-blue-50 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>
                     <button onClick={() => {
-                      if(window.confirm(`Supprimer définitivement l'article "${p.name}" ?`)) {
-                        setProducts(products.filter(x => x.id !== p.id));
-                        showToast("Article supprimé du registre");
-                      }
+                      setItemToDelete(p);
+                      setIsDeleteModalOpen(true);
                     }} className="p-3 text-rose-300 hover:text-rose-600 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
                   </td>
                 </tr>
@@ -1038,6 +1038,41 @@ const App: React.FC = () => {
                 className="py-6 bg-rose-600 text-white rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-rose-700 shadow-xl shadow-rose-600/20 transition-all"
               >
                 Confirmer Déconnexion
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {isDeleteModalOpen && itemToDelete && (
+        <Modal onClose={() => {setIsDeleteModalOpen(false); setItemToDelete(null);}} title="Confirmation de Suppression">
+          <div className="text-center space-y-8">
+            <div className="inline-flex p-8 bg-rose-50 text-rose-600 rounded-[3rem] shadow-inner">
+              <Trash2 className="w-16 h-16" />
+            </div>
+            <div className="space-y-4">
+              <h4 className="text-3xl font-black italic uppercase text-slate-900 tracking-tighter">Supprimer cet Article ?</h4>
+              <p className="text-slate-400 font-bold uppercase text-[11px] tracking-widest max-w-sm mx-auto leading-relaxed">
+                Êtes-vous sûr de vouloir supprimer définitivement <span className="text-rose-600 font-black">{itemToDelete.name}</span> du registre d'inventaire ? Cette action est irréversible.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-6 pt-6">
+              <button 
+                onClick={() => {setIsDeleteModalOpen(false); setItemToDelete(null);}}
+                className="py-6 bg-slate-50 text-slate-400 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-100 transition-all"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={() => {
+                  setProducts(products.filter(x => x.id !== itemToDelete.id));
+                  setIsDeleteModalOpen(false);
+                  setItemToDelete(null);
+                  showToast("Article supprimé du registre", "success");
+                }}
+                className="py-6 bg-rose-600 text-white rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-rose-700 shadow-xl shadow-rose-600/20 transition-all"
+              >
+                Confirmer Suppression
               </button>
             </div>
           </div>
