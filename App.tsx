@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, Package, History as HistoryIcon, Plus, AlertTriangle, 
   Trash2, Search, X, Calculator, FileSpreadsheet, 
@@ -13,14 +13,14 @@ import {
   MapPin, User, Calendar, Tag, Info, Building2, Download, Filter, 
   Clock, RefreshCw, FileCheck, BarChart3, PieChart, Lock, Globe,
   Layers, Database, ClipboardList, Briefcase, Key, Bell, CreditCard,
-  Cpu, HardDrive, Share2, ToggleLeft as Toggle, ChevronDown
+  Cpu, HardDrive, Share2, ToggleLeft as Toggle, ChevronDown, Activity,
+  Zap, Save, Eye, ListFilter, SlidersHorizontal
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart as RePieChart, Pie } from 'recharts';
 import { Product, InventoryLog, ViewType, Site, Furniture, RapportAutomatique } from './types';
 import { INITIAL_PRODUCTS, INITIAL_CATEGORIES, INITIAL_FURNITURE } from './constants';
 import { getProfessionalReport, extractDataFromImage, generateProductImage } from './services/geminiService';
 
-// Fix for Error 1: Define viewLabels mapping
 const viewLabels: Record<ViewType, string> = {
   dashboard: 'Tableau de bord',
   inventory: 'Stocks / Inventaire',
@@ -45,7 +45,7 @@ const App: React.FC = () => {
     { id: 'S3', name: 'Succursale Est (Goma)' }
   ]);
   
-  // États UI
+  // UI States
   const [searchTerm, setSearchTerm] = useState('');
   const [historyFilterType, setHistoryFilterType] = useState<string>('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -53,43 +53,35 @@ const App: React.FC = () => {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiReport, setAiReport] = useState<RapportAutomatique | null>(null);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   
-  // États Paramètres
+  // Advanced Inventory Filters
+  const [showFilters, setShowFilters] = useState(false);
+  const [stockStatusFilter, setStockStatusFilter] = useState<'all' | 'alert' | 'sufficient'>('all');
+  const [unitFilter, setUnitFilter] = useState<string>('all');
+  const [minPrice, setMinPrice] = useState<string>('');
+  const [maxPrice, setMaxPrice] = useState<string>('');
+  const [minTotal, setMinTotal] = useState<string>('');
+  const [maxTotal, setMaxTotal] = useState<string>('');
+
+  // Confirmation Modals
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
+  // Settings States
   const [settingsToggles, setSettingsToggles] = useState({
     autoArchive: true,
     emailAlerts: true,
     cloudSync: false,
     aiOptimization: true,
-    twoFactor: true
+    twoFactor: true,
+    lowStockNotifications: true
   });
 
-  // Modales & Edition
+  // Modals & Editing
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isFurnitureModalOpen, setIsFurnitureModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Product | Furniture | null>(null);
 
-  // Implementation of handleStudioGeneration and its state
-  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
-  const handleStudioGeneration = async (prompt: string) => {
-    setIsAiLoading(true);
-    setGeneratedImageUrl(null);
-    try {
-      const imageUrl = await generateProductImage(prompt);
-      if (imageUrl) {
-        setGeneratedImageUrl(imageUrl);
-        showToast("Rendu studio terminé avec succès");
-      } else {
-        showToast("Le studio n'a pas pu générer l'image", "error");
-      }
-    } catch (error) {
-      console.error(error);
-      showToast("Erreur système lors du rendu", "error");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  // Persistence locale
   useEffect(() => {
     const savedP = localStorage.getItem('ss_products');
     const savedF = localStorage.getItem('ss_furniture');
@@ -110,13 +102,12 @@ const App: React.FC = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  // Logique métier
-  const addHistory = (log: Omit<InventoryLog, 'id' | 'date'>) => {
+  const addLog = (log: Omit<InventoryLog, 'id' | 'date'>) => {
     const newLog: InventoryLog = {
       ...log,
       id: Math.random().toString(36).substr(2, 9),
       date: new Date().toISOString(),
-      responsible: 'Admin_Pro'
+      responsible: 'Admin_ERP_DRC'
     };
     setHistory(prev => [newLog, ...prev]);
   };
@@ -135,6 +126,25 @@ const App: React.FC = () => {
     }
   };
 
+  const handleStudioGeneration = async (prompt: string) => {
+    setIsAiLoading(true);
+    setGeneratedImageUrl(null);
+    try {
+      const imageUrl = await generateProductImage(prompt);
+      if (imageUrl) {
+        setGeneratedImageUrl(imageUrl);
+        showToast("Rendu studio terminé avec succès");
+      } else {
+        showToast("Le studio n'a pas pu générer l'image", "error");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("Erreur système lors du rendu", "error");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   const handleImageImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -148,12 +158,15 @@ const App: React.FC = () => {
           ...p,
           id: Math.random().toString(36).substr(2, 9),
           siteId: sites[0].id,
-          lastInventoryDate: new Date().toISOString()
+          lastInventoryDate: new Date().toISOString(),
+          monthlyNeed: 10,
+          currency: 'Fc'
         })) as Product[];
         setProducts(prev => [...prev, ...newProducts]);
-        showToast(`${newProducts.length} articles identifiés et importés automatiquement`);
+        newProducts.forEach(p => addLog({ type: 'entry', productId: p.id, productName: p.name, changeAmount: p.currentStock, finalStock: p.currentStock }));
+        showToast(`${newProducts.length} articles identifiés automatiquement`);
       } catch (e) {
-        showToast("Échec de la reconnaissance visuelle automatique", "error");
+        showToast("Échec de la reconnaissance visuelle automatique (Erreur 500 possible)", "error");
       } finally {
         setIsImportLoading(false);
       }
@@ -161,7 +174,40 @@ const App: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const COLORS = ['#004a23', '#00703c', '#008f4c', '#00aa5b', '#00c76a', '#10b981'];
+  // --- Filtered Products Logic ---
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      // Basic Search
+      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           p.category.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Stock Status
+      const isAlert = p.currentStock <= p.minStock;
+      const matchesStockStatus = stockStatusFilter === 'all' || 
+                                (stockStatusFilter === 'alert' && isAlert) ||
+                                (stockStatusFilter === 'sufficient' && !isAlert);
+
+      // Unit
+      const matchesUnit = unitFilter === 'all' || p.unit === unitFilter;
+
+      // Price Range
+      const matchesPrice = (!minPrice || p.unitPrice >= Number(minPrice)) && 
+                          (!maxPrice || p.unitPrice <= Number(maxPrice));
+
+      // Total Value Range
+      const totalVal = p.currentStock * p.unitPrice;
+      const matchesTotal = (!minTotal || totalVal >= Number(minTotal)) && 
+                           (!maxTotal || totalVal <= Number(maxTotal));
+
+      return matchesSearch && matchesStockStatus && matchesUnit && matchesPrice && matchesTotal;
+    });
+  }, [products, searchTerm, stockStatusFilter, unitFilter, minPrice, maxPrice, minTotal, maxTotal]);
+
+  const uniqueUnits = useMemo(() => {
+    return Array.from(new Set(products.map(p => p.unit))).filter(Boolean);
+  }, [products]);
+
+  // --- Sub-Views ---
 
   const DashboardView = () => (
     <div className="space-y-10 animate-in fade-in slide-in-from-top-4 duration-700">
@@ -176,7 +222,7 @@ const App: React.FC = () => {
         <div className="xl:col-span-2 space-y-8">
            <div className="bg-white p-10 border rounded-[3rem] shadow-sm">
               <div className="flex justify-between items-center mb-8">
-                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-slate-500"><TrendingUp className="w-4 h-4 text-emerald-600" /> Journal de Traçabilité Récent</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-slate-500"><TrendingUp className="w-4 h-4 text-emerald-600" /> Flux de Traçabilité Récent</h3>
                 <button onClick={() => setActiveView('history')} className="text-[10px] font-black uppercase text-emerald-700 hover:text-emerald-900 transition-colors">Registre complet</button>
               </div>
               <div className="space-y-4">
@@ -207,7 +253,7 @@ const App: React.FC = () => {
               <h3 className="text-xs font-black uppercase tracking-widest mb-10 text-slate-500">Flux de Travail Rapide</h3>
               <div className="space-y-4">
                 <WorkflowBtn label="Lancer l'Audit Automatique" onClick={() => setActiveView('monthly_report')} icon={FileText} />
-                <WorkflowBtn label="Extraction Vision" onClick={() => setActiveView('import')} icon={Camera} />
+                <WorkflowBtn label="Extraction Vision AI" onClick={() => setActiveView('import')} icon={Camera} />
                 <WorkflowBtn label="Recensement Mobilier" onClick={() => setActiveView('furniture')} icon={ClipboardList} />
                 <WorkflowBtn label="Visualisation Studio" onClick={() => setActiveView('studio')} icon={ImageIcon} />
               </div>
@@ -216,7 +262,7 @@ const App: React.FC = () => {
               <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-400/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl group-hover:scale-150 transition-transform duration-1000" />
               <div className="relative z-10 space-y-4">
                 <ShieldCheck className="w-10 h-10 text-emerald-400" />
-                <h4 className="text-xl font-black italic uppercase leading-tight">Système de Sécurité Audit Actif</h4>
+                <h4 className="text-xl font-black italic uppercase leading-tight">Système de Sécurité Actif</h4>
                 <p className="text-[10px] font-medium text-emerald-100/60 leading-relaxed uppercase tracking-widest">Base de données synchronisée et certifiée ISO-9001 simulation.</p>
               </div>
            </div>
@@ -227,56 +273,185 @@ const App: React.FC = () => {
 
   const InventoryView = () => (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row gap-6 bg-white p-8 border rounded-[3rem] shadow-sm">
-        <div className="relative flex-1">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-          <input 
-            type="text" 
-            placeholder="Référence, désignation ou catégorie..." 
-            value={searchTerm} 
-            onChange={e => setSearchTerm(e.target.value)} 
-            className="w-full pl-16 pr-8 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-900 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 transition-all" 
-          />
+      <div className="bg-white p-8 border rounded-[3rem] shadow-sm flex flex-col gap-6">
+        <div className="flex flex-col md:flex-row gap-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+            <input 
+              type="text" 
+              placeholder="Référence, désignation ou catégorie..." 
+              value={searchTerm} 
+              onChange={e => setSearchTerm(e.target.value)} 
+              className="w-full pl-16 pr-8 py-4 bg-slate-50 border-none rounded-2xl outline-none font-bold text-slate-900 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 transition-all" 
+            />
+          </div>
+          <div className="flex gap-4">
+            <button 
+              onClick={() => setShowFilters(!showFilters)}
+              className={`p-4 rounded-2xl border transition-all flex items-center gap-3 text-[10px] font-black uppercase tracking-widest ${showFilters ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-600/20' : 'bg-white text-slate-500 border-slate-100 hover:bg-slate-50'}`}
+            >
+              <SlidersHorizontal className="w-5 h-5" />
+              <span className="hidden sm:inline">Filtres Avancés</span>
+              { (stockStatusFilter !== 'all' || unitFilter !== 'all' || minPrice || maxPrice || minTotal || maxTotal) && <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" /> }
+            </button>
+            <button onClick={() => {setEditingItem(null); setIsProductModalOpen(true);}} className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 hover:bg-black shadow-xl transition-all whitespace-nowrap"><Plus className="w-5 h-5" /> Ajouter</button>
+          </div>
         </div>
-        <button onClick={() => {setEditingItem(null); setIsProductModalOpen(true);}} className="px-10 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 hover:bg-black shadow-xl transition-all"><Plus className="w-5 h-5" /> Ajouter Consommable</button>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 pt-4 border-t border-slate-50 animate-in slide-in-from-top-4 duration-300">
+            <div className="space-y-3">
+              <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Package className="w-3 h-3" /> Niveau de Stock</label>
+              <select 
+                value={stockStatusFilter} 
+                onChange={e => setStockStatusFilter(e.target.value as any)}
+                className="w-full p-4 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-900 text-xs italic"
+              >
+                <option value="all">Tous les stocks</option>
+                <option value="alert">En Alerte (≤ Seuil)</option>
+                <option value="sufficient">Stock Suffisant</option>
+              </select>
+            </div>
+            
+            <div className="space-y-3">
+              <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Tag className="w-3 h-3" /> Unité de Mesure</label>
+              <select 
+                value={unitFilter} 
+                onChange={e => setUnitFilter(e.target.value)}
+                className="w-full p-4 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-900 text-xs italic"
+              >
+                <option value="all">Toutes les unités</option>
+                {uniqueUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><DollarSign className="w-3 h-3" /> Prix Unitaire (Fc)</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="number" 
+                  placeholder="Min" 
+                  value={minPrice} 
+                  onChange={e => setMinPrice(e.target.value)}
+                  className="w-1/2 p-4 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-900 text-xs tabular-nums"
+                />
+                <input 
+                  type="number" 
+                  placeholder="Max" 
+                  value={maxPrice} 
+                  onChange={e => setMaxPrice(e.target.value)}
+                  className="w-1/2 p-4 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-900 text-xs tabular-nums"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Calculator className="w-3 h-3" /> Valeur Totale (Fc)</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="number" 
+                  placeholder="Min" 
+                  value={minTotal} 
+                  onChange={e => setMinTotal(e.target.value)}
+                  className="w-1/2 p-4 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-900 text-xs tabular-nums"
+                />
+                <input 
+                  type="number" 
+                  placeholder="Max" 
+                  value={maxTotal} 
+                  onChange={e => setMaxTotal(e.target.value)}
+                  className="w-1/2 p-4 bg-slate-50 border-none rounded-xl outline-none font-bold text-slate-900 text-xs tabular-nums"
+                />
+              </div>
+            </div>
+
+            <div className="lg:col-span-4 flex justify-end gap-3 pt-2">
+              <button 
+                onClick={() => {
+                  setStockStatusFilter('all');
+                  setUnitFilter('all');
+                  setMinPrice('');
+                  setMaxPrice('');
+                  setMinTotal('');
+                  setMaxTotal('');
+                  setSearchTerm('');
+                }}
+                className="px-6 py-2 text-[9px] font-black uppercase text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+              >
+                Réinitialiser les filtres
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="bg-white border rounded-[3.5rem] overflow-hidden shadow-sm">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-            <tr>
-              <th className="px-10 py-6">Désignation & Catégorie</th>
-              <th className="px-10 py-6 text-center">Niveau de Stock</th>
-              <th className="px-10 py-6 text-center">Unité</th>
-              <th className="px-10 py-6 text-right">Valeur Unitaire</th>
-              <th className="px-10 py-6 text-right">Valeur Totale</th>
-              <th className="px-10 py-6 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
-              <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="px-10 py-6">
-                  <p className="font-black text-slate-900 uppercase italic group-hover:text-emerald-700 transition-colors">{p.name}</p>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{p.category}</p>
-                </td>
-                <td className="px-10 py-6 text-center">
-                  <div className="flex flex-col items-center gap-1">
-                    <span className={`text-xl font-black tabular-nums ${p.currentStock <= p.minStock ? 'text-rose-600' : 'text-slate-900'}`}>{p.currentStock}</span>
-                    {p.currentStock <= p.minStock && <span className="text-[8px] font-black uppercase text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">Alerte Seuil</span>}
-                  </div>
-                </td>
-                <td className="px-10 py-6 text-center font-bold text-slate-400 uppercase text-[10px]">{p.unit}</td>
-                <td className="px-10 py-6 text-right font-black text-slate-900 tabular-nums">{p.unitPrice.toLocaleString()} Fc</td>
-                <td className="px-10 py-6 text-right font-black text-emerald-700 tabular-nums">{(p.currentStock * p.unitPrice).toLocaleString()} Fc</td>
-                <td className="px-10 py-6 text-right space-x-2">
-                   <button onClick={() => {setEditingItem(p); setIsProductModalOpen(true);}} className="p-3 text-blue-500 hover:bg-blue-50 rounded-xl"><Edit2 className="w-4 h-4" /></button>
-                   <button onClick={() => setProducts(products.filter(x => x.id !== p.id))} className="p-3 text-rose-300 hover:text-rose-600 rounded-xl"><Trash2 className="w-4 h-4" /></button>
-                </td>
+      <div className="bg-white border rounded-[3.5rem] overflow-hidden shadow-sm relative">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+              <tr>
+                <th className="px-10 py-6">Désignation & Classification</th>
+                <th className="px-10 py-6 text-center">Niveau de Stock</th>
+                <th className="px-10 py-6 text-center">Unité</th>
+                <th className="px-10 py-6 text-right">Valeur Unitaire</th>
+                <th className="px-10 py-6 text-right">Valeur Totale</th>
+                <th className="px-10 py-6 text-right">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredProducts.length > 0 ? filteredProducts.map(p => (
+                <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-10 py-6">
+                    <p className="font-black text-slate-900 uppercase italic group-hover:text-emerald-700 transition-colors">{p.name}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{p.category}</p>
+                  </td>
+                  <td className="px-10 py-6 text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`text-xl font-black tabular-nums ${p.currentStock <= p.minStock ? 'text-rose-600' : 'text-slate-900'}`}>{p.currentStock}</span>
+                      {p.currentStock <= p.minStock && <span className="text-[8px] font-black uppercase text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">Alerte Seuil</span>}
+                    </div>
+                  </td>
+                  <td className="px-10 py-6 text-center font-bold text-slate-400 uppercase text-[10px]">{p.unit}</td>
+                  <td className="px-10 py-6 text-right font-black text-slate-900 tabular-nums">{p.unitPrice.toLocaleString()} Fc</td>
+                  <td className="px-10 py-6 text-right font-black text-emerald-700 tabular-nums">{(p.currentStock * p.unitPrice).toLocaleString()} Fc</td>
+                  <td className="px-10 py-6 text-right space-x-2">
+                    <button onClick={() => {setEditingItem(p); setIsProductModalOpen(true);}} className="p-3 text-blue-500 hover:bg-blue-50 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>
+                    <button onClick={() => {
+                      if(window.confirm(`Supprimer définitivement l'article "${p.name}" ?`)) {
+                        setProducts(products.filter(x => x.id !== p.id));
+                        showToast("Article supprimé du registre");
+                      }
+                    }} className="p-3 text-rose-300 hover:text-rose-600 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={6} className="px-10 py-32 text-center">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="p-6 bg-slate-50 rounded-full text-slate-300"><Search className="w-12 h-12" /></div>
+                      <p className="text-xl font-black italic uppercase text-slate-300 tracking-widest">Aucun article ne correspond à ces critères</p>
+                      <button 
+                        onClick={() => {
+                          setStockStatusFilter('all');
+                          setUnitFilter('all');
+                          setMinPrice('');
+                          setMaxPrice('');
+                          setMinTotal('');
+                          setMaxTotal('');
+                          setSearchTerm('');
+                        }}
+                        className="text-[10px] font-black uppercase text-emerald-600 hover:underline tracking-widest"
+                      >
+                        Effacer tous les filtres
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -439,35 +614,36 @@ const App: React.FC = () => {
   };
 
   const SettingsView = () => (
-    <div className="space-y-10 animate-in fade-in duration-700 pb-20">
+    <div className="space-y-12 animate-in fade-in duration-700 pb-20">
       {/* Profil & Sécurité */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white p-12 border rounded-[4rem] shadow-sm space-y-10">
-          <div className="flex items-center gap-6">
+        <div className="lg:col-span-2 bg-white p-12 border rounded-[4rem] shadow-sm space-y-10 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-12 text-slate-50 opacity-10 group-hover:scale-110 transition-transform pointer-events-none"><User className="w-48 h-48" /></div>
+          <div className="flex items-center gap-6 relative z-10">
             <div className="p-5 bg-emerald-50 text-emerald-600 rounded-[2rem] shadow-inner"><User className="w-10 h-10" /></div>
             <div>
               <h3 className="text-3xl font-black italic uppercase text-slate-900 tracking-tighter">Profil Administrateur Pro</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identité & Certificats de Sécurité ERP</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identité & Habilitations ERP DRC</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <SettingsInput label="Nom Complet" value="Admin_Pro_SS" />
-            <SettingsInput label="Adresse E-mail" value="superviseur@smartstock.pro" />
-            <SettingsInput label="Rôle Système" value="Super-Administrateur" disabled />
-            <SettingsInput label="Clé de Signature" value="************" type="password" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+            <SettingsInput label="Nom de l'Administrateur" value="Admin_ERP_Pro" />
+            <SettingsInput label="E-mail de Contact" value="admin@smartstock.cd" />
+            <SettingsInput label="Rôle Système" value="Superviseur Logistique" disabled />
+            <SettingsInput label="ID Unitaire" value="HQ-KIN-SS-001" disabled />
           </div>
-          <div className="pt-8 border-t flex flex-wrap gap-4">
-             <button className="px-10 py-4 bg-emerald-700 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-emerald-800 transition-all">Mettre à jour le profil</button>
-             <button className="px-10 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all flex items-center gap-2"><Key className="w-4 h-4" /> Changer le mot de passe</button>
+          <div className="pt-8 border-t flex flex-wrap gap-4 relative z-10">
+             <button className="px-10 py-5 bg-[#004a23] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl hover:bg-black transition-all">Mettre à jour le profil</button>
+             <button className="px-10 py-5 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all flex items-center gap-2"><Key className="w-4 h-4" /> Changer le Token</button>
           </div>
         </div>
 
         <div className="bg-[#004a23] p-12 rounded-[4rem] text-white space-y-8 shadow-2xl relative overflow-hidden">
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-400/20" />
-          <h4 className="text-xl font-black uppercase italic tracking-tight flex items-center gap-3"><ShieldCheck className="w-6 h-6 text-emerald-400" /> Sécurité ERP</h4>
+          <div className="absolute top-0 left-0 w-full h-1 bg-emerald-400/20" />
+          <h4 className="text-2xl font-black uppercase italic tracking-tight flex items-center gap-3"><ShieldCheck className="w-7 h-7 text-emerald-400" /> Sécurité ERP</h4>
           <div className="space-y-6">
              <ToggleItem 
-               label="Authentification 2FA" 
+               label="Auth. Double Facteur" 
                desc="Sécurisez l'accès par code mobile" 
                active={settingsToggles.twoFactor} 
                onClick={() => setSettingsToggles({...settingsToggles, twoFactor: !settingsToggles.twoFactor})}
@@ -485,36 +661,43 @@ const App: React.FC = () => {
                onClick={() => setSettingsToggles({...settingsToggles, cloudSync: !settingsToggles.cloudSync})}
              />
           </div>
+          <div className="pt-6 border-t border-white/10">
+            <p className="text-[10px] font-black uppercase opacity-60 mb-1">Dernière Intrusion Bloquée</p>
+            <p className="text-xs font-bold text-emerald-400">Aucune menace détectée</p>
+          </div>
         </div>
       </div>
 
-      {/* Gestion des Sites & Logistique */}
+      {/* Réseau & Sites */}
       <div className="bg-white p-12 border rounded-[4rem] shadow-sm space-y-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="p-5 bg-blue-50 text-blue-600 rounded-[2rem] shadow-inner"><Building2 className="w-10 h-10" /></div>
             <div>
-              <h3 className="text-3xl font-black italic uppercase text-slate-900 tracking-tighter">Réseau Logistique</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Maillage des sites d'exploitation et entrepôts</p>
+              <h3 className="text-3xl font-black italic uppercase text-slate-900 tracking-tighter">Architecture Logistique</h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Maillage des sites d'exploitation</p>
             </div>
           </div>
-          <button className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3"><Plus className="w-5 h-5" /> Nouveau Site</button>
+          <button className="px-10 py-5 bg-slate-900 text-white rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-2xl flex items-center gap-3 hover:bg-black transition-all active:scale-95"><Plus className="w-5 h-5" /> Nouveau Hub</button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
            {sites.map(s => (
-             <div key={s.id} className="p-8 bg-slate-50 border rounded-[3rem] group hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="p-3 bg-white rounded-xl shadow-sm"><MapPin className="w-5 h-5 text-blue-500" /></div>
-                  <button className="p-2 text-rose-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button>
+             <div key={s.id} className="p-10 bg-slate-50 border rounded-[3.5rem] group hover:border-blue-500 hover:shadow-2xl hover:bg-white transition-all cursor-pointer relative">
+                <div className="flex justify-between items-start mb-6">
+                  <div className="p-4 bg-white rounded-2xl shadow-sm group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors"><MapPin className="w-6 h-6" /></div>
+                  <div className="flex gap-2">
+                    <button className="p-2.5 text-slate-300 hover:text-blue-600 transition-all"><Edit2 className="w-4 h-4" /></button>
+                    <button className="p-2.5 text-rose-200 hover:text-rose-600 transition-all"><Trash2 className="w-4 h-4" /></button>
+                  </div>
                 </div>
-                <h5 className="text-[14px] font-black uppercase text-slate-900 italic mb-1">{s.name}</h5>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Status: Opérationnel • 248 Actifs</p>
+                <h5 className="text-[16px] font-black uppercase text-slate-900 italic mb-2 tracking-tight">{s.name}</h5>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status: Opérationnel • 142 Actifs</p>
              </div>
            ))}
         </div>
       </div>
 
-      {/* Paramètres Système & Données */}
+      {/* Moteur IA & Données */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         <div className="bg-white p-12 border rounded-[4rem] shadow-sm space-y-10">
           <div className="flex items-center gap-6">
@@ -526,63 +709,64 @@ const App: React.FC = () => {
           </div>
           <div className="space-y-6">
              <ToggleItem 
-               label="Optimisation de Stock AI" 
-               desc="Proposer des commandes basées sur l'usage" 
+               label="Optimisation AI Proactive" 
+               desc="Proposer des réapprovisionnements basés sur l'historique" 
                active={settingsToggles.aiOptimization} 
                onClick={() => setSettingsToggles({...settingsToggles, aiOptimization: !settingsToggles.aiOptimization})}
                dark
              />
              <ToggleItem 
                label="Archivage Automatique" 
-               desc="Archiver les flux de plus de 12 mois" 
+               desc="Archiver les flux de plus de 12 mois sans activité" 
                active={settingsToggles.autoArchive} 
                onClick={() => setSettingsToggles({...settingsToggles, autoArchive: !settingsToggles.autoArchive})}
                dark
              />
              <ToggleItem 
-               label="Alertes E-mail Prioritaires" 
-               desc="Notifications de seuils critiques par mail" 
-               active={settingsToggles.emailAlerts} 
-               onClick={() => setSettingsToggles({...settingsToggles, emailAlerts: !settingsToggles.emailAlerts})}
+               label="Alertes Stock Critique" 
+               desc="Notifications temps réel de rupture" 
+               active={settingsToggles.lowStockNotifications} 
+               onClick={() => setSettingsToggles({...settingsToggles, lowStockNotifications: !settingsToggles.lowStockNotifications})}
                dark
              />
           </div>
         </div>
 
-        <div className="bg-white p-12 border rounded-[4rem] shadow-sm space-y-10">
-          <div className="flex items-center gap-6">
-            <div className="p-5 bg-slate-50 text-slate-400 rounded-[2rem] shadow-inner"><Database className="w-10 h-10" /></div>
-            <div>
-              <h3 className="text-3xl font-black italic uppercase text-slate-900 tracking-tighter">Données & Maintenance</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gestion du stockage et backups</p>
+        <div className="bg-white p-12 border rounded-[4rem] shadow-sm flex flex-col justify-between space-y-10">
+          <div className="space-y-10">
+            <div className="flex items-center gap-6">
+              <div className="p-5 bg-slate-50 text-slate-400 rounded-[2rem] shadow-inner"><HardDrive className="w-10 h-10" /></div>
+              <div>
+                <h3 className="text-3xl font-black italic uppercase text-slate-900 tracking-tighter">Maintenance Base</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Santé du stockage et archives</p>
+              </div>
+            </div>
+            <div className="p-10 bg-slate-50 rounded-[3rem] border space-y-8 shadow-inner">
+               <div className="space-y-4">
+                 <div className="flex justify-between items-center text-[11px] font-black uppercase text-slate-400">
+                    <span className="flex items-center gap-2"><Activity className="w-4 h-4" /> Occupation Données</span>
+                    <span className="text-emerald-600">4.2 MB / 100 MB</span>
+                 </div>
+                 <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 w-[4.2%]" />
+                 </div>
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                  <button className="py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 hover:bg-black transition-all">
+                    <Share2 className="w-4 h-4" /> Export CSV
+                  </button>
+                  <button className="py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 hover:bg-slate-50 transition-all">
+                    <RefreshCw className="w-4 h-4" /> Restaurer
+                  </button>
+               </div>
             </div>
           </div>
-          <div className="p-8 bg-slate-50 rounded-[3rem] border space-y-6">
-             <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <HardDrive className="w-5 h-5 text-slate-400" />
-                  <span className="text-[11px] font-black uppercase text-slate-900">Occupation Base de Données</span>
-                </div>
-                <span className="text-[11px] font-black text-emerald-600">4.2 MB / 100 MB</span>
-             </div>
-             <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 w-[4.2%]" />
-             </div>
-             <div className="grid grid-cols-2 gap-4 pt-4">
-                <button className="py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest flex items-center justify-center gap-2 hover:bg-black transition-all">
-                  <Share2 className="w-4 h-4" /> Exporter (JSON)
-                </button>
-                <button className="py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase text-[9px] tracking-widest flex items-center justify-center gap-2 hover:bg-slate-50 transition-all">
-                  <RefreshCw className="w-4 h-4" /> Restaurer
-                </button>
-             </div>
-          </div>
-          <div className="bg-rose-50 p-6 rounded-[2.5rem] border border-rose-100 flex items-start gap-4">
-             <ShieldAlert className="w-6 h-6 text-rose-600 shrink-0 mt-1" />
+          <div className="bg-rose-50 p-8 rounded-[2.5rem] border border-rose-100 flex items-start gap-4">
+             <ShieldAlert className="w-10 h-10 text-rose-600 shrink-0 mt-1" />
              <div>
-                <p className="text-[11px] font-black uppercase text-rose-900">Zone Critique de Suppression</p>
-                <p className="text-[10px] font-medium text-rose-700 leading-tight mt-1">L'effacement des données est irréversible. Toutes les traces d'audit seront perdues.</p>
-                <button className="mt-4 text-[9px] font-black uppercase text-rose-600 hover:underline">Réinitialiser tout le système</button>
+                <p className="text-[12px] font-black uppercase text-rose-900 italic">Zone de Danger ERP</p>
+                <p className="text-[10px] font-medium text-rose-700 leading-tight mt-1 uppercase tracking-tight">Toutes les données seront supprimées définitivement.</p>
+                <button className="mt-4 px-8 py-3 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700 shadow-xl transition-all">Réinitialiser Système</button>
              </div>
           </div>
         </div>
@@ -592,12 +776,12 @@ const App: React.FC = () => {
 
   const SettingsInput = ({ label, value, type = "text", disabled = false }: any) => (
     <div className="space-y-3">
-      <label className="text-[10px] font-black uppercase text-slate-400 ml-1">{label}</label>
+      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">{label}</label>
       <input 
         type={type} 
         defaultValue={value} 
         disabled={disabled}
-        className={`w-full p-5 bg-slate-50 border-none rounded-2xl font-bold text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`} 
+        className={`w-full px-8 py-5 bg-slate-50 border-none rounded-[1.8rem] font-bold text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all text-sm ${disabled ? 'opacity-50 cursor-not-allowed bg-slate-100' : 'hover:bg-slate-100/50'}`} 
       />
     </div>
   );
@@ -605,20 +789,20 @@ const App: React.FC = () => {
   const ToggleItem = ({ label, desc, active, onClick, disabled, dark }: any) => (
     <div className={`flex items-center justify-between gap-6 ${disabled ? 'opacity-30' : ''}`}>
       <div className="flex-1">
-        <p className={`text-[12px] font-black uppercase italic ${dark ? 'text-slate-900' : 'text-white'}`}>{label}</p>
-        <p className={`text-[9px] font-bold ${dark ? 'text-slate-400' : 'text-emerald-100/50'} uppercase mt-0.5`}>{desc}</p>
+        <p className={`text-[13px] font-black uppercase italic ${dark ? 'text-slate-900' : 'text-white'}`}>{label}</p>
+        <p className={`text-[9px] font-bold ${dark ? 'text-slate-400' : 'text-emerald-100/50'} uppercase mt-1 tracking-widest`}>{desc}</p>
       </div>
       <button 
         onClick={onClick}
         disabled={disabled}
-        className={`w-14 h-8 rounded-full transition-all relative ${active ? 'bg-emerald-400' : (dark ? 'bg-slate-200' : 'bg-white/10')}`}
+        className={`w-16 h-9 rounded-full transition-all relative border-2 ${active ? 'bg-emerald-400 border-emerald-500' : (dark ? 'bg-slate-200 border-slate-300' : 'bg-white/10 border-white/20')}`}
       >
-        <div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-xl transition-all ${active ? 'left-7' : 'left-1'}`} />
+        <div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-2xl transition-all duration-300 ${active ? 'left-8' : 'left-1'}`} />
       </button>
     </div>
   );
 
-  // Vue Login
+  // --- Main Layout Login ---
   if (!isLoggedIn) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-6 relative overflow-hidden">
       <div className="absolute top-0 right-0 w-[50vw] h-[50vh] bg-emerald-600/5 -translate-y-1/2 translate-x-1/2 rounded-full blur-[100px]" />
@@ -639,14 +823,14 @@ const App: React.FC = () => {
           </div>
           <button onClick={() => setIsLoggedIn(true)} className="w-full py-6 bg-[#004a23] text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-black hover:-translate-y-1 transition-all active:scale-95">Accès Système Haute Sécurité</button>
         </div>
-        <p className="text-[9px] font-black uppercase text-slate-300 tracking-widest italic pt-4">© 2025 SmartStock Engineering • All Rights Reserved</p>
+        <p className="text-[9px] font-black uppercase text-slate-300 tracking-widest italic pt-4">© 2025 SmartStock Engineering • ISO Certified Simulation</p>
       </div>
     </div>
   );
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
-      {/* Sidebar de luxe */}
+      {/* Sidebar ERP */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-80 bg-[#004a23] m-5 rounded-[4rem] p-10 flex flex-col text-white shadow-2xl transition-transform lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:flex'} no-print`}>
         <div className="flex items-center gap-4 mb-14 border-b border-white/10 pb-10">
           <ShieldCheck className="w-10 h-10 text-emerald-400" />
@@ -663,16 +847,16 @@ const App: React.FC = () => {
           <NavItem active={activeView === 'history'} onClick={() => {setActiveView('history'); setIsSidebarOpen(false);}} icon={HistoryIcon} label="Historique / Audit" />
           <NavItem active={activeView === 'monthly_report'} onClick={() => {setActiveView('monthly_report'); setIsSidebarOpen(false);}} icon={FileText} label="Reporting Automatique" />
           <NavItem active={activeView === 'studio'} onClick={() => {setActiveView('studio'); setIsSidebarOpen(false);}} icon={ImageIcon} label="Studio Photo" />
-          <NavItem active={activeView === 'settings'} onClick={() => {setActiveView('settings'); setIsSidebarOpen(false);}} icon={SettingsIcon} label="Paramètres" />
+          <NavItem active={activeView === 'settings'} onClick={() => {setActiveView('settings'); setIsSidebarOpen(false);}} icon={SettingsIcon} label="Paramètres Système" />
         </nav>
         <div className="mt-10 pt-8 border-t border-white/10">
-          <button onClick={() => setIsLoggedIn(false)} className="w-full py-5 bg-rose-600/10 text-rose-300 rounded-3xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-rose-600 hover:text-white transition-all flex items-center justify-center gap-3">
+          <button onClick={() => setIsLogoutModalOpen(true)} className="w-full py-5 bg-rose-600/10 text-rose-300 rounded-3xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-rose-600 hover:text-white transition-all flex items-center justify-center gap-3">
             <LogOut className="w-5 h-5" /> Déconnexion
           </button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
+      {/* Main Container */}
       <main className="flex-1 p-10 lg:p-14 lg:ml-80 overflow-y-auto relative no-print:bg-[#f8fafc] print:p-0 print:ml-0">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-14 gap-6 no-print">
           <div>
@@ -680,22 +864,15 @@ const App: React.FC = () => {
               <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-4 bg-white border rounded-2xl shadow-sm"><Menu className="w-6 h-6" /></button>
               <h2 className="text-4xl font-black text-slate-900 italic uppercase tracking-tighter">{viewLabels[activeView]}</h2>
             </div>
-            <div className="flex items-center gap-3 mt-2">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.4em]">Système de gestion industrielle opérationnel</p>
-            </div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.4em] mt-2 flex items-center gap-2"><Globe className="w-3 h-3 text-emerald-500" /> Hub Central : DRC_HQ_KIN_01</p>
           </div>
           <div className="flex items-center gap-6">
-             <div className="hidden lg:flex items-center gap-2 px-6 py-3 bg-white border rounded-2xl shadow-sm">
-                <Globe className="w-4 h-4 text-emerald-600" />
-                <span className="text-[10px] font-black uppercase text-slate-900 tracking-widest">DRC_HQ_01</span>
-             </div>
-             <button onClick={() => window.print()} className="p-5 bg-white border rounded-[1.5rem] text-slate-400 hover:text-emerald-600 hover:border-emerald-200 shadow-sm transition-all"><Printer className="w-6 h-6" /></button>
+             <button onClick={() => window.print()} className="p-5 bg-white border rounded-[1.8rem] text-slate-400 hover:text-emerald-600 hover:border-emerald-200 shadow-sm transition-all"><Printer className="w-6 h-6" /></button>
              <div className="h-12 w-px bg-slate-200" />
-             <div className="flex items-center gap-4 bg-white p-2.5 pr-7 border rounded-[1.8rem] shadow-sm hover:shadow-lg transition-all cursor-pointer">
-                <div className="w-12 h-12 bg-[#004a23] rounded-[1.2rem] flex items-center justify-center text-white font-black text-sm italic">AD</div>
+             <div className="flex items-center gap-4 bg-white p-2.5 pr-8 border rounded-[2rem] shadow-sm hover:shadow-xl transition-all cursor-pointer">
+                <div className="w-12 h-12 bg-[#004a23] rounded-[1.2rem] flex items-center justify-center text-white font-black text-sm italic shadow-inner">AD</div>
                 <div className="hidden sm:block">
-                  <p className="text-[11px] font-black uppercase text-slate-900 leading-none">Admin ERP</p>
+                  <p className="text-[11px] font-black uppercase text-slate-900 leading-none">Admin_ERP</p>
                   <p className="text-[9px] font-bold text-emerald-500 uppercase mt-1">Superviseur Pro</p>
                 </div>
              </div>
@@ -712,8 +889,8 @@ const App: React.FC = () => {
         {activeView === 'import' && (
           <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 animate-in zoom-in-95 duration-700">
              <ImportCard 
-               title="Vision Automatique" 
-               desc="Extraction par reconnaissance visuelle" 
+               title="Vision Automatique AI" 
+               desc="Extraction par reconnaissance visuelle haute précision" 
                icon={Camera} 
                color="emerald" 
                onFileChange={handleImageImport} 
@@ -734,38 +911,56 @@ const App: React.FC = () => {
                {!aiReport ? (
                  <div className="bg-white p-24 border rounded-[4rem] shadow-sm text-center space-y-10 relative overflow-hidden group">
                     <div className="absolute top-0 left-0 w-full h-2 bg-emerald-600" />
-                    <div className="inline-flex p-6 bg-slate-50 text-slate-300 rounded-[2.5rem] group-hover:scale-110 group-hover:bg-emerald-50 group-hover:text-emerald-500 transition-all">
-                      <BarChart3 className="w-16 h-16" />
+                    <div className="inline-flex p-8 bg-slate-50 text-slate-300 rounded-[3rem] group-hover:scale-110 group-hover:bg-emerald-50 group-hover:text-emerald-500 transition-all shadow-inner">
+                      <BarChart3 className="w-20 h-20" />
                     </div>
                     <div className="space-y-4">
-                      <h3 className="text-4xl font-black italic uppercase text-slate-900 tracking-tighter">Certification Logistique Automatique</h3>
-                      <p className="text-slate-400 font-medium max-w-xl mx-auto leading-relaxed">
-                        Générez un document d'audit complet incluant analyses financières, graphiques de performance et recommandations stratégiques automatiques.
+                      <h3 className="text-5xl font-black italic uppercase text-slate-900 tracking-tighter">Certification Logistique</h3>
+                      <p className="text-slate-400 font-medium max-w-xl mx-auto leading-relaxed uppercase text-xs tracking-widest">
+                        Générez un document d'audit complet incluant analyses financières, graphiques de performance et recommandations stratégiques automatiques par IA.
                       </p>
                     </div>
-                    <button onClick={handleGenerateReport} disabled={isAiLoading} className="px-16 py-6 bg-[#004a23] text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.25em] shadow-2xl hover:bg-black hover:-translate-y-1 transition-all flex items-center justify-center gap-4 mx-auto disabled:opacity-50">
-                      {isAiLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <ShieldCheck className="w-6 h-6" />} {isAiLoading ? "Traitement Automatique..." : "Générer le Rapport Officiel"}
+                    <button onClick={handleGenerateReport} disabled={isAiLoading} className="px-16 py-7 bg-[#004a23] text-white rounded-3xl font-black uppercase text-xs tracking-[0.25em] shadow-2xl hover:bg-black hover:-translate-y-1 transition-all flex items-center justify-center gap-4 mx-auto disabled:opacity-50">
+                      {isAiLoading ? <Loader2 className="w-7 h-7 animate-spin" /> : <ShieldCheck className="w-7 h-7" />} {isAiLoading ? "Analyse Systémique..." : "Générer le Rapport Certifié"}
                     </button>
+                    <p className="text-[9px] font-black uppercase text-slate-300 tracking-[0.5em] pt-4">Système SmartStock Pro v2.5.4</p>
                  </div>
                ) : (
                  <div className="bg-white border rounded-[4rem] shadow-2xl overflow-hidden print:shadow-none print:rounded-none print:border-none animate-in slide-in-from-bottom-12 duration-1000">
-                    <div className="bg-[#004a23] p-16 text-white">
-                       <h1 className="text-8xl font-black italic uppercase tracking-tighter leading-none">Rapport d'Audit</h1>
-                       <p className="text-2xl font-bold uppercase opacity-60 mt-4">Système SmartStock Pro</p>
-                    </div>
-                    <div className="p-16 space-y-10">
-                       <p className="text-2xl text-slate-700 leading-relaxed font-serif italic border-l-8 border-emerald-600 pl-10">{aiReport.summary}</p>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                          <div className="bg-rose-50 p-10 rounded-[3rem] border border-rose-100">
-                             <h4 className="text-xl font-black uppercase italic text-rose-900 mb-6">Urgences d'Audit</h4>
-                             {aiReport.criticalAlerts.map((a,i) => <div key={i} className="mb-3 text-rose-800 font-bold uppercase text-[11px]">• {a}</div>)}
+                    <div className="bg-[#004a23] p-20 text-white relative overflow-hidden">
+                       <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-400/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+                       <div className="relative z-10 flex justify-between items-start">
+                          <div className="space-y-8">
+                             <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-white/10 rounded-2xl backdrop-blur-md border border-white/20">
+                                <Lock className="w-4 h-4 text-emerald-400" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Document Confidentiel - Audit Patrimonial</span>
+                             </div>
+                             <h1 className="text-8xl font-black italic uppercase tracking-tighter leading-none">Rapport de Performance<br/>Logistique</h1>
+                             <p className="text-2xl font-bold uppercase opacity-60 mt-4 tracking-widest">Généré le {new Date(aiReport.generatedAt).toLocaleDateString('fr-FR', {day:'2-digit', month:'long', year:'numeric'})}</p>
                           </div>
-                          <div className="bg-emerald-50 p-10 rounded-[3rem] border border-emerald-100">
-                             <h4 className="text-xl font-black uppercase italic text-emerald-900 mb-6">Recommandations</h4>
-                             {aiReport.recommendations.map((r,i) => <div key={i} className="mb-3 text-emerald-800 font-bold uppercase text-[11px]">• {r}</div>)}
+                          <div className="text-right">
+                             <ShieldCheck className="w-32 h-32 text-emerald-400 mb-6 inline-block" />
+                             <p className="text-[11px] font-black uppercase tracking-[0.4em] opacity-50 italic">SmartStock Pro Enterprise</p>
                           </div>
                        </div>
-                       <button onClick={() => window.print()} className="w-full py-8 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase tracking-widest no-print">Imprimer / PDF</button>
+                    </div>
+                    <div className="p-20 space-y-20 bg-slate-50/50">
+                       <p className="text-3xl text-slate-800 leading-relaxed font-serif italic border-l-[12px] border-emerald-600 pl-16 py-4">{aiReport.summary}</p>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                          <div className="bg-rose-50 p-14 rounded-[4rem] border border-rose-100 shadow-sm space-y-8">
+                             <h4 className="text-2xl font-black uppercase italic text-rose-900 flex items-center gap-4"><AlertTriangle className="w-8 h-8" /> Risques Critiques</h4>
+                             <div className="space-y-4">
+                               {aiReport.criticalAlerts.map((a,i) => <div key={i} className="flex gap-4 p-5 bg-white/60 rounded-3xl text-rose-900 font-bold uppercase text-[12px] italic border border-rose-200/50 shadow-sm"><Zap className="w-5 h-5 shrink-0" /> {a}</div>)}
+                             </div>
+                          </div>
+                          <div className="bg-emerald-50 p-14 rounded-[4rem] border border-emerald-100 shadow-sm space-y-8">
+                             <h4 className="text-2xl font-black uppercase italic text-emerald-900 flex items-center gap-4"><CheckCircle className="w-8 h-8" /> Recommandations</h4>
+                             <div className="space-y-4">
+                               {aiReport.recommendations.map((r,i) => <div key={i} className="flex gap-4 p-5 bg-white/60 rounded-3xl text-emerald-900 font-bold uppercase text-[12px] italic border border-emerald-200/50 shadow-sm"><ArrowUpRight className="w-5 h-5 shrink-0" /> {r}</div>)}
+                             </div>
+                          </div>
+                       </div>
+                       <button onClick={() => window.print()} className="w-full py-10 bg-slate-900 text-white rounded-[3rem] font-black uppercase tracking-[0.3em] no-print hover:bg-black transition-all shadow-2xl flex items-center justify-center gap-6 text-lg"><Printer className="w-8 h-8" /> Imprimer le Rapport Certifié</button>
                     </div>
                  </div>
                )}
@@ -776,17 +971,17 @@ const App: React.FC = () => {
         {activeView === 'studio' && (
           <div className="max-w-4xl mx-auto space-y-10 animate-in fade-in duration-500">
              <div className="bg-white p-14 border rounded-[4rem] shadow-sm space-y-10">
-                <div className="flex items-center gap-5">
-                  <div className="p-5 bg-emerald-50 text-emerald-600 rounded-[2rem]"><ImageIcon className="w-10 h-10" /></div>
+                <div className="flex items-center gap-6">
+                  <div className="p-6 bg-emerald-50 text-emerald-600 rounded-[2.5rem] shadow-inner"><ImageIcon className="w-12 h-12" /></div>
                   <div>
-                    <h3 className="text-3xl font-black italic uppercase text-slate-900 tracking-tighter">Studio Photo Automatique</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Génération de visuels catalogue par automatique</p>
+                    <h3 className="text-4xl font-black italic uppercase text-slate-900 tracking-tighter">Studio Photo Pro</h3>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Visualisation assistée par IA pour catalogue</p>
                   </div>
                 </div>
                 <textarea 
                   id="studio-prompt"
-                  placeholder="Décrivez l'actif à visualiser (ex: Bureau exécutif en chêne sombre, éclairage doux)..." 
-                  className="w-full p-8 bg-slate-50 border-none rounded-[2.5rem] font-bold text-slate-900 outline-none min-h-[150px] focus:ring-4 focus:ring-emerald-500/10 transition-all text-lg"
+                  placeholder="Décrivez l'actif à visualiser (ex: Un bureau de direction moderne en bois précieux, haute résolution, éclairage studio)..." 
+                  className="w-full p-10 bg-slate-50 border-none rounded-[3rem] font-bold text-slate-900 outline-none min-h-[200px] focus:ring-4 focus:ring-emerald-500/10 transition-all text-xl"
                 />
                 <button 
                   onClick={() => {
@@ -794,17 +989,18 @@ const App: React.FC = () => {
                     if (p) handleStudioGeneration(p);
                   }}
                   disabled={isAiLoading}
-                  className="w-full py-7 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl flex items-center justify-center gap-4 hover:bg-black transition-all"
+                  className="w-full py-8 bg-[#004a23] text-white rounded-[3rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl flex items-center justify-center gap-6 hover:bg-black transition-all"
                 >
-                  {isAiLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Sparkles className="w-6 h-6" />} Générer le Visuel Professionnel
+                  {isAiLoading ? <Loader2 className="w-8 h-8 animate-spin" /> : <Sparkles className="w-8 h-8" />} Générer le Visuel Haute Fidélité
                 </button>
                 
                 {generatedImageUrl && (
-                  <div className="mt-10 rounded-[3rem] overflow-hidden border-8 border-white shadow-2xl animate-in zoom-in-95 duration-700 bg-slate-50 p-4">
-                    <img src={generatedImageUrl} alt="Rendu de l'actif" className="w-full h-auto rounded-[2rem]" />
-                    <div className="mt-4 flex justify-end">
-                       <a href={generatedImageUrl} download="rendu_studio.png" className="flex items-center gap-2 text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-800">
-                         <Download className="w-4 h-4" /> Télécharger le rendu
+                  <div className="mt-14 rounded-[4rem] overflow-hidden border-[16px] border-white shadow-2xl animate-in zoom-in-95 duration-1000 bg-slate-50 p-6">
+                    <img src={generatedImageUrl} alt="Rendu de l'actif" className="w-full h-auto rounded-[2.5rem] shadow-2xl" />
+                    <div className="mt-8 flex justify-between items-center px-4">
+                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Rendu généré par Gemini Visual Studio</p>
+                       <a href={generatedImageUrl} download="rendu_erp.png" className="flex items-center gap-3 px-8 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg">
+                         <Download className="w-5 h-5" /> Télécharger
                        </a>
                     </div>
                   </div>
@@ -814,9 +1010,42 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Modales ERP */}
+      {/* MODALS */}
+      {isLogoutModalOpen && (
+        <Modal onClose={() => setIsLogoutModalOpen(false)} title="Confirmer la Déconnexion">
+          <div className="text-center space-y-8">
+            <div className="inline-flex p-8 bg-rose-50 text-rose-600 rounded-[3rem] shadow-inner">
+              <LogOut className="w-16 h-16" />
+            </div>
+            <div className="space-y-4">
+              <h4 className="text-3xl font-black italic uppercase text-slate-900 tracking-tighter">Terminer la Session ?</h4>
+              <p className="text-slate-400 font-bold uppercase text-[11px] tracking-widest max-w-sm mx-auto leading-relaxed">
+                Toutes les modifications non enregistrées localement seront perdues. L'accès sécurisé devra être ré-authentifié.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-6 pt-6">
+              <button 
+                onClick={() => setIsLogoutModalOpen(false)}
+                className="py-6 bg-slate-50 text-slate-400 rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-100 transition-all"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={() => {
+                  setIsLoggedIn(false);
+                  setIsLogoutModalOpen(false);
+                }}
+                className="py-6 bg-rose-600 text-white rounded-3xl font-black uppercase text-[10px] tracking-widest hover:bg-rose-700 shadow-xl shadow-rose-600/20 transition-all"
+              >
+                Confirmer Déconnexion
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {isProductModalOpen && (
-        <Modal onClose={() => setIsProductModalOpen(false)} title={editingItem ? "Fiche Technique Article" : "Nouvelle Fiche Consommable"}>
+        <Modal onClose={() => setIsProductModalOpen(false)} title={editingItem ? "Fiche Technique Article" : "Nouvel Article Consommable"}>
            <form onSubmit={(e) => {
              e.preventDefault();
              const fd = new FormData(e.currentTarget);
@@ -833,47 +1062,41 @@ const App: React.FC = () => {
                siteId: sites[0].id,
                lastInventoryDate: new Date().toISOString()
              };
-             if(!editingItem) {
-               addHistory({ type: 'entry', productId: newItem.id, productName: newItem.name, changeAmount: newItem.currentStock, finalStock: newItem.currentStock });
-             }
+             if(!editingItem) addLog({ type: 'entry', productId: newItem.id, productName: newItem.name, changeAmount: newItem.currentStock, finalStock: newItem.currentStock });
              if(editingItem) setProducts(products.map(p => p.id === newItem.id ? newItem : p));
              else setProducts([...products, newItem]);
              setIsProductModalOpen(false);
-             showToast("Synchronisation des données de stock terminée");
-           }} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-3 col-span-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Désignation Officielle</label>
-                <input name="name" defaultValue={editingItem?.name} required className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none" />
+             showToast("Données de stock synchronisées avec succès");
+           }} className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              <div className="space-y-4 col-span-2">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">Désignation de l'Article</label>
+                <input name="name" defaultValue={editingItem?.name} required className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 text-lg italic" />
               </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Catégorie</label>
-                <select 
-                  name="category" 
-                  defaultValue={(editingItem as Product)?.category} 
-                  className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none"
-                >
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">Classification / Catégorie</label>
+                <select name="category" defaultValue={(editingItem as Product)?.category} className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 uppercase italic">
                    {INITIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Unité de Mesure</label>
-                <input name="unit" defaultValue={(editingItem as Product)?.unit} placeholder="Ex: Cartons" className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none" />
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">Unité de Mesure</label>
+                <input name="unit" defaultValue={(editingItem as Product)?.unit} placeholder="Ex: Cartons" className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 uppercase italic" />
               </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Stock Actuel</label>
-                <input type="number" name="currentStock" defaultValue={(editingItem as Product)?.currentStock || 0} required className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none" />
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">Volume en Stock</label>
+                <input type="number" name="currentStock" defaultValue={(editingItem as Product)?.currentStock || 0} required className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 text-2xl tabular-nums" />
               </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Prix Unitaire (Fc)</label>
-                <input type="number" name="unitPrice" defaultValue={(editingItem as Product)?.unitPrice || 0} required className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none" />
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">Prix de Valorisation (Fc)</label>
+                <input type="number" name="unitPrice" defaultValue={(editingItem as Product)?.unitPrice || 0} required className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 text-2xl tabular-nums" />
               </div>
-              <button type="submit" className="col-span-2 py-6 bg-[#004a23] text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl mt-6">Enregistrer en Base</button>
+              <button type="submit" className="col-span-2 py-8 bg-[#004a23] text-white rounded-[3rem] font-black uppercase text-sm tracking-[0.3em] shadow-2xl mt-10 hover:bg-black transition-all flex items-center justify-center gap-4"><Save className="w-6 h-6" /> Enregistrer l'Article</button>
            </form>
         </Modal>
       )}
 
       {isFurnitureModalOpen && (
-        <Modal onClose={() => setIsFurnitureModalOpen(false)} title={editingItem ? "Dossier Immobilisé" : "Nouvel Actif Immobilisé"}>
+        <Modal onClose={() => setIsFurnitureModalOpen(false)} title={editingItem ? "Dossier Immobilisé" : "Nouvel Actif Patrimonial"}>
            <form onSubmit={(e) => {
              e.preventDefault();
              const fd = new FormData(e.currentTarget);
@@ -893,114 +1116,118 @@ const App: React.FC = () => {
              if(editingItem) setFurniture(furniture.map(f => f.id === newItem.id ? newItem : f));
              else setFurniture([...furniture, newItem]);
              setIsFurnitureModalOpen(false);
-             showToast("Données patrimoniales sécurisées");
-           }} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-3 col-span-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Code Inventaire Barcode/Tag</label>
-                <input name="code" defaultValue={(editingItem as Furniture)?.code} required placeholder="AST-0000-ERP" className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none" />
+             showToast("Patrimoine mis à jour dans le registre central");
+           }} className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              <div className="space-y-4 col-span-2">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">Code d'Inventaire / Barcode Tag</label>
+                <input name="code" defaultValue={(editingItem as Furniture)?.code} required placeholder="AST-HQ-2025-..." className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 font-mono text-lg" />
               </div>
-              <div className="space-y-3 col-span-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Désignation de l'Actif</label>
-                <input name="name" defaultValue={editingItem?.name} required className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none" />
+              <div className="space-y-4 col-span-2">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">Désignation de l'Actif</label>
+                <input name="name" defaultValue={editingItem?.name} required className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 text-lg italic" />
               </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Affectation / Département</label>
-                <input name="assignedTo" defaultValue={(editingItem as Furniture)?.assignedTo} placeholder="Ex: Finance" className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none" />
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">Affectation / Responsable</label>
+                <input name="assignedTo" defaultValue={(editingItem as Furniture)?.assignedTo} placeholder="Ex: Bureau CEO" className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 uppercase italic" />
               </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Site</label>
-                <select name="siteId" defaultValue={(editingItem as Furniture)?.siteId} className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none">
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">Localisation / Hub</label>
+                <select name="siteId" defaultValue={(editingItem as Furniture)?.siteId} className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 italic">
                   {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">État Physique</label>
-                <select name="condition" defaultValue={(editingItem as Furniture)?.condition} className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none">
-                  <option value="Neuf">Neuf</option>
-                  <option value="Bon">Bon état</option>
-                  <option value="Usé">Usé</option>
-                  <option value="Endommagé">Endommagé</option>
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">État de Conservation</label>
+                <select name="condition" defaultValue={(editingItem as Furniture)?.condition} className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 uppercase italic">
+                  <option value="Neuf">Neuf (Certification ISO)</option>
+                  <option value="Bon">Bon État Opérationnel</option>
+                  <option value="Usé">Usé (Amortissement)</option>
+                  <option value="Endommagé">Endommagé / Rebut</option>
                 </select>
               </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Quantité Totale</label>
-                <input type="number" name="currentCount" defaultValue={(editingItem as Furniture)?.currentCount || 1} className="w-full p-5 bg-slate-50 border rounded-2xl font-bold text-slate-900 outline-none" />
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-slate-400 ml-2">Quantité Décomptée</label>
+                <input type="number" name="currentCount" defaultValue={(editingItem as Furniture)?.currentCount || 1} className="w-full p-6 bg-slate-50 border-none rounded-3xl font-black text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 text-2xl tabular-nums" />
               </div>
-              <button type="submit" className="col-span-2 py-6 bg-slate-900 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl mt-6">Enregistrer l'immobilisation</button>
+              <button type="submit" className="col-span-2 py-8 bg-slate-900 text-white rounded-[3rem] font-black uppercase text-sm tracking-[0.3em] shadow-2xl mt-10 hover:bg-black transition-all flex items-center justify-center gap-4"><FileCheck className="w-6 h-6" /> Certifier l'Immobilisation</button>
            </form>
         </Modal>
       )}
 
+      {/* GLOBAL TOAST */}
       {notification && (
-        <div className={`fixed bottom-12 right-12 z-[200] px-10 py-7 rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] flex items-center gap-5 bg-white border-2 animate-in slide-in-from-right-10 ${notification.type === 'error' ? 'text-rose-600 border-rose-100' : 'text-emerald-600 border-emerald-100'}`}>
-          {notification.type === 'success' ? <div className="p-2 bg-emerald-50 rounded-xl"><CheckCircle className="w-6 h-6" /></div> : <div className="p-2 bg-rose-50 rounded-xl"><ShieldAlert className="w-6 h-6" /></div>}
-          <span className="text-[12px] font-black uppercase tracking-widest text-slate-900 italic">{notification.message}</span>
+        <div className={`fixed bottom-12 right-12 z-[200] px-12 py-8 rounded-[3rem] shadow-[0_40px_80px_-15px_rgba(0,0,0,0.4)] flex items-center gap-6 bg-white border-2 animate-in slide-in-from-right-10 ${notification.type === 'error' ? 'text-rose-600 border-rose-100' : 'text-emerald-600 border-emerald-100'}`}>
+          <div className={`p-3 rounded-2xl shadow-inner ${notification.type === 'error' ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+            {notification.type === 'success' ? <ShieldCheck className="w-8 h-8" /> : <ShieldAlert className="w-8 h-8" />}
+          </div>
+          <span className="text-[14px] font-black uppercase tracking-widest text-slate-900 italic">{notification.message}</span>
         </div>
       )}
     </div>
   );
 };
 
-// Composants Atomiques Internes
+// --- Atomic Sub-Components ---
+
 const NavItem = ({ active, onClick, icon: Icon, label }: any) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-5 px-9 py-6 rounded-[2.2rem] text-[10px] font-black uppercase tracking-[0.25em] transition-all duration-300 ${active ? 'bg-white text-[#004a23] shadow-[0_20px_40px_-12px_rgba(0,0,0,0.2)] scale-[1.03]' : 'text-emerald-100/30 hover:bg-white/5 hover:text-white'}`}>
-    <Icon className={`w-6 h-6 transition-transform duration-500 ${active ? 'scale-110' : 'scale-90'}`} /> {label}
+  <button onClick={onClick} className={`w-full flex items-center gap-6 px-10 py-7 rounded-[2.5rem] text-[11px] font-black uppercase tracking-[0.3em] transition-all duration-300 ${active ? 'bg-white text-[#004a23] shadow-2xl scale-[1.05]' : 'text-emerald-100/30 hover:bg-white/5 hover:text-white'}`}>
+    <Icon className={`w-7 h-7 transition-transform duration-500 ${active ? 'scale-110' : 'scale-90'}`} /> {label}
   </button>
 );
 
 const StatCard = ({ label, value, icon: Icon, color, trend, alert }: any) => (
-  <div className={`bg-white p-10 border rounded-[3.5rem] shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden ${alert ? 'border-rose-100' : ''}`}>
-    <div className={`absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform ${alert ? 'text-rose-500' : 'text-slate-400'}`}><Icon className="w-24 h-24" /></div>
-    <div className={`p-5 bg-${color}-50 text-${color}-600 rounded-[1.5rem] w-max mb-8 group-hover:rotate-12 transition-transform shadow-inner`}><Icon className="w-8 h-8" /></div>
+  <div className={`bg-white p-12 border rounded-[4rem] shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden ${alert ? 'border-rose-100' : ''}`}>
+    <div className={`absolute top-0 right-0 p-10 opacity-5 group-hover:scale-125 transition-transform duration-1000 ${alert ? 'text-rose-500' : 'text-slate-400'}`}><Icon className="w-32 h-32" /></div>
+    <div className={`p-6 bg-${color}-50 text-${color}-600 rounded-[1.8rem] w-max mb-10 group-hover:rotate-12 transition-transform shadow-inner`}><Icon className="w-10 h-10" /></div>
     <div className="relative z-10">
-      <div className="flex justify-between items-end mb-1">
-        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-        {trend && <span className={`text-[9px] font-black uppercase ${trend.startsWith('+') ? 'text-emerald-500' : 'text-slate-300'}`}>{trend}</span>}
+      <div className="flex justify-between items-end mb-2">
+        <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+        {trend && <span className={`text-[10px] font-black uppercase ${trend.startsWith('+') ? 'text-emerald-500' : 'text-slate-300'}`}>{trend}</span>}
       </div>
-      <h4 className={`text-4xl font-black italic tracking-tighter tabular-nums ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h4>
+      <h4 className={`text-5xl font-black italic tracking-tighter tabular-nums ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h4>
     </div>
   </div>
 );
 
 const WorkflowBtn = ({ label, onClick, icon: Icon }: any) => (
-  <button onClick={onClick} className="w-full flex items-center justify-between p-6 bg-slate-50 rounded-[2rem] border hover:bg-white hover:shadow-xl hover:border-emerald-500 transition-all group">
-    <div className="flex items-center gap-5">
-      <div className="p-4 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:text-emerald-600 group-hover:scale-110 transition-all"><Icon className="w-5 h-5" /></div>
-      <span className="text-[11px] font-black uppercase text-slate-900 italic tracking-tight">{label}</span>
+  <button onClick={onClick} className="w-full flex items-center justify-between p-7 bg-slate-50 rounded-[2.5rem] border hover:bg-white hover:shadow-2xl hover:border-emerald-500 transition-all group">
+    <div className="flex items-center gap-6">
+      <div className="p-5 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:text-emerald-600 group-hover:scale-110 transition-all shadow-inner"><Icon className="w-6 h-6" /></div>
+      <span className="text-[12px] font-black uppercase text-slate-900 italic tracking-tighter">{label}</span>
     </div>
-    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:translate-x-1 transition-transform" />
+    <ChevronRight className="w-6 h-6 text-slate-300 group-hover:translate-x-2 transition-transform" />
   </button>
 );
 
 const ImportCard = ({ title, desc, icon: Icon, color, onFileChange, loading }: any) => (
-  <div className={`bg-white p-14 border-4 border-dashed border-slate-100 rounded-[4rem] text-center space-y-8 hover:border-${color}-500 transition-all cursor-pointer relative overflow-hidden group shadow-sm hover:shadow-2xl`}>
+  <div className={`bg-white p-16 border-[6px] border-dashed border-slate-100 rounded-[5rem] text-center space-y-10 hover:border-${color}-500 transition-all cursor-pointer relative overflow-hidden group shadow-sm hover:shadow-2xl`}>
     {loading && (
-      <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-4">
-        <Loader2 className="w-12 h-12 text-emerald-600 animate-spin" />
-        <p className="text-[10px] font-black uppercase text-emerald-600 tracking-[0.4em] animate-pulse">Analyse Vision Automatique...</p>
+      <div className="absolute inset-0 bg-white/90 backdrop-blur-md z-20 flex flex-col items-center justify-center gap-6">
+        <Loader2 className="w-16 h-16 text-emerald-600 animate-spin" />
+        <p className="text-[11px] font-black uppercase text-emerald-600 tracking-[0.5em] animate-pulse">Traitement AI Vision En Cours...</p>
       </div>
     )}
-    <div className={`absolute inset-0 bg-${color}-50/30 opacity-0 group-hover:opacity-100 transition-opacity`} />
+    <div className={`absolute inset-0 bg-${color}-50/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
     <div className="relative z-10">
-      <div className={`w-28 h-28 bg-${color}-50 text-${color}-600 rounded-[2.5rem] flex items-center justify-center mx-auto mb-10 group-hover:scale-110 transition-transform shadow-inner`}><Icon className="w-12 h-12" /></div>
-      <h3 className="text-3xl font-black italic uppercase text-slate-900 tracking-tighter">{title}</h3>
-      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-2">{desc}</p>
+      <div className={`w-32 h-32 bg-${color}-50 text-${color}-600 rounded-[3rem] flex items-center justify-center mx-auto mb-12 group-hover:scale-110 transition-transform shadow-inner`}><Icon className="w-16 h-16" /></div>
+      <h3 className="text-4xl font-black italic uppercase text-slate-900 tracking-tighter">{title}</h3>
+      <p className="text-[12px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-3">{desc}</p>
       <input type="file" onChange={onFileChange} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*,.csv" />
     </div>
   </div>
 );
 
 const Modal = ({ children, onClose, title }: any) => (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/90 backdrop-blur-2xl no-print animate-in fade-in duration-300">
-    <div className="bg-white w-full max-w-4xl rounded-[5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-500 overflow-hidden max-h-[92vh] flex flex-col border border-white/20">
-      <div className="px-16 py-12 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center shrink-0">
+  <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-slate-900/95 backdrop-blur-3xl no-print animate-in fade-in duration-300">
+    <div className="bg-white w-full max-w-5xl rounded-[6rem] shadow-[0_60px_120px_-30px_rgba(0,0,0,0.6)] animate-in zoom-in-95 duration-500 overflow-hidden max-h-[94vh] flex flex-col border border-white/20">
+      <div className="px-20 py-16 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center shrink-0">
         <div>
-          <h3 className="text-3xl font-black italic uppercase text-slate-900 tracking-tighter leading-none">{title}</h3>
-          <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-[0.3em] mt-2 flex items-center gap-2"><Lock className="w-3 h-3" /> Zone de Saisie Sécurisée</p>
+          <h3 className="text-4xl font-black italic uppercase text-slate-900 tracking-tighter leading-none">{title}</h3>
+          <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-[0.4em] mt-3 flex items-center gap-3"><ShieldCheck className="w-4 h-4" /> Zone de Certification ERP</p>
         </div>
-        <button onClick={onClose} className="p-4 text-slate-300 hover:text-slate-900 transition-all bg-white rounded-3xl border shadow-xl active:scale-90"><X className="w-8 h-8" /></button>
+        <button onClick={onClose} className="p-5 text-slate-300 hover:text-slate-900 transition-all bg-white rounded-[2rem] border shadow-2xl active:scale-90"><X className="w-10 h-10" /></button>
       </div>
-      <div className="px-16 py-14 overflow-y-auto custom-scrollbar flex-1">{children}</div>
+      <div className="px-20 py-16 overflow-y-auto custom-scrollbar flex-1">{children}</div>
     </div>
   </div>
 );
