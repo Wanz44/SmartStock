@@ -1,0 +1,8 @@
+{
+  "name": "SmartStock Pro Intelligent",
+  "description": "Système de gestion de stock automatisé avec IA proactive, assistant vocal Live et reporting analytique.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
