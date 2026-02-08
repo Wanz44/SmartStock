@@ -1057,15 +1057,6 @@ const App: React.FC = () => {
           >
             Démarrer la session <ArrowRightLeft className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
           </button>
-          
-          {!hasApiKey && (
-            <button 
-              onClick={handleOpenKeySelector} 
-              className="w-full py-4 text-[10px] font-black uppercase text-slate-400 border-2 border-slate-50 rounded-[2.5rem] flex items-center justify-center gap-2 hover:bg-slate-50 hover:text-emerald-600 transition-all"
-            >
-              <Cpu className="w-4 h-4" /> Configurer Moteur IA Gemini
-            </button>
-          )}
         </div>
 
         <div className="pt-8 border-t border-slate-50 flex justify-center gap-12">
