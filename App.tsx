@@ -11,7 +11,7 @@ import {
   Activity, FileSpreadsheet, ChevronDown, FileDown, Wand2, Zap, MapPin,
   Building2, HardDrive, SearchCode, ScanFace, DatabaseZap, Filter, TrendingDown,
   ChevronUp, ChevronDown as ChevronDownIcon, Layers, MoreHorizontal,
-  PlusCircle, Check, LogOut, Info, FileUp
+  PlusCircle, Check, LogOut, Info, FileUp, FileSpreadsheet as ExcelIcon
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -105,14 +105,6 @@ const App: React.FC = () => {
     checkKey();
   }, []);
 
-  const handleOpenKeySelector = async () => {
-    if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      setHasApiKey(true);
-      setIsLoggedIn(true);
-    }
-  };
-
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
@@ -198,7 +190,6 @@ const App: React.FC = () => {
       showToast("Registre SmartStock mis à jour");
     };
 
-    // Si c'est une modification, on demande confirmation
     const exists = products.find(p => p.id === editingProduct.id);
     if (exists) {
       setConfirmModal({
@@ -293,6 +284,97 @@ const App: React.FC = () => {
     };
     reader.readAsText(file);
     if (e.target) e.target.value = '';
+  };
+
+  // NEW: Filtered Export with Green Formatting (Excel compatible HTML)
+  const handleFilteredExport = () => {
+    const filtered = products.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            p.category.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = selectedCategory === 'Toutes' || p.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+
+    if (filtered.length === 0) {
+      showToast("Aucune donnée correspondant aux filtres", "error");
+      return;
+    }
+
+    const title = `Inventaire SmartStock - ${selectedCategory} - ${new Date().toLocaleDateString()}`;
+    const headerColor = "#143d21";
+    const subColor = "#f0fdf4";
+    const textColor = "#ffffff";
+
+    let html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          table { border-collapse: collapse; width: 100%; font-family: 'Segoe UI', sans-serif; }
+          th { background-color: ${headerColor}; color: ${textColor}; padding: 12px; border: 1px solid #ddd; text-align: left; text-transform: uppercase; font-size: 10px; }
+          td { padding: 10px; border: 1px solid #ddd; font-size: 11px; }
+          .row-even { background-color: ${subColor}; }
+          .title { font-size: 20px; font-weight: bold; color: ${headerColor}; margin-bottom: 20px; text-align: center; }
+          .footer { font-size: 9px; color: #999; margin-top: 20px; text-align: right; }
+          .alert { color: #e11d48; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="title">${title}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Désignation</th>
+              <th>Catégorie</th>
+              <th>Stock</th>
+              <th>Seuil</th>
+              <th>Prix Unitaire</th>
+              <th>Valeur Totale</th>
+              <th>Unité</th>
+              <th>Site</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    filtered.forEach((p, index) => {
+      const isLow = p.currentStock <= p.minStock;
+      const totalVal = p.currentStock * p.unitPrice;
+      html += `
+        <tr class="${index % 2 === 0 ? '' : 'row-even'}">
+          <td>SKU-${p.id.slice(-4)}</td>
+          <td><b>${p.name.toUpperCase()}</b></td>
+          <td>${p.category}</td>
+          <td style="text-align: center; font-weight: bold;">${p.currentStock}</td>
+          <td style="text-align: center;">${p.minStock}</td>
+          <td>${p.unitPrice.toLocaleString()} ${p.currency}</td>
+          <td><b>${totalVal.toLocaleString()} ${p.currency}</b></td>
+          <td>${p.unit}</td>
+          <td>${p.siteId}</td>
+          <td class="${isLow ? 'alert' : ''}">${isLow ? 'RÉAPPRO' : 'OPTIMAL'}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+          </tbody>
+        </table>
+        <div class="footer">Généré par SmartStock Pro Automatic System - DRC HQ - ${new Date().toLocaleString()}</div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `SmartStock_Export_Vert_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Export filtré (Tableau Vert) généré");
   };
 
   const handleManualCsvExport = () => {
@@ -593,20 +675,23 @@ const App: React.FC = () => {
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 w-3 h-3 pointer-events-none" />
             </div>
+            
             <button 
               onClick={() => fileInputRef.current?.click()} 
-              className="px-6 py-4 bg-white border-2 border-slate-50 text-slate-600 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-slate-50 transition-all shadow-sm"
+              className="px-5 py-4 bg-white border-2 border-slate-50 text-slate-600 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm"
               title="Importer un fichier CSV"
             >
-              <FileUp className="w-4 h-4" /> Import CSV
+              <FileUp className="w-4 h-4 text-blue-500" /> Import
             </button>
+            
             <button 
-              onClick={handleManualCsvExport}
-              className="px-6 py-4 bg-white border-2 border-slate-50 text-slate-600 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-slate-50 transition-all shadow-sm"
-              title="Exporter au format CSV"
+              onClick={handleFilteredExport}
+              className="px-5 py-4 bg-[#f0fdf4] border-2 border-emerald-100 text-emerald-700 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 hover:bg-emerald-100 transition-all shadow-sm"
+              title="Exporter le registre filtré avec mise en forme verte"
             >
-              <FileDown className="w-4 h-4" /> Export CSV
+              <ExcelIcon className="w-4 h-4 text-emerald-600" /> Export Vert
             </button>
+
             <button onClick={() => handleOpenEditModal(null)} className="px-8 py-4 bg-[#143d21] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-lg hover:bg-black transition-all">
               <Plus className="w-4 h-4" /> Ajouter
             </button>
@@ -1002,29 +1087,6 @@ const App: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="bg-white p-12 border rounded-[3.5rem] shadow-sm space-y-10">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-600 shadow-inner"><Building2 className="w-8 h-8" /></div>
-            <div>
-              <h3 className="text-2xl font-black italic uppercase tracking-tighter leading-none">Réseau Logistique</h3>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Maillage des sites d'exploitation</p>
-            </div>
-          </div>
-          <button className="px-10 py-5 bg-black text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-2 shadow-xl hover:bg-emerald-900 transition-all"><Plus className="w-4 h-4" /> Nouveau Site</button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {sites.map(site => (
-            <div key={site.id} className="p-8 bg-slate-50 rounded-[2.5rem] space-y-4 border border-transparent hover:border-emerald-500/10 transition-all cursor-pointer group">
-              <MapPin className="w-6 h-6 text-blue-600 group-hover:scale-110 transition-transform" />
-              <div>
-                <h4 className="font-black text-slate-900 uppercase italic text-sm">{site.name}</h4>
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">STATUS: {site.status.toUpperCase()} • RESPONSABLE: {site.manager}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 
@@ -1141,7 +1203,6 @@ const App: React.FC = () => {
 
   if (!isLoggedIn) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-6 relative overflow-hidden">
-      {/* Background patterns */}
       <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-1/2 h-1/2 bg-emerald-300 rounded-full blur-[150px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-1/2 h-1/2 bg-blue-300 rounded-full blur-[150px]" />
@@ -1171,21 +1232,6 @@ const App: React.FC = () => {
           >
             Démarrer la session <ArrowRightLeft className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
           </button>
-        </div>
-
-        <div className="pt-8 border-t border-slate-50 flex justify-center gap-12">
-          <div className="text-center">
-            <p className="text-[10px] font-black text-slate-900 uppercase">ISO-9001</p>
-            <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Certifié</p>
-          </div>
-          <div className="text-center">
-            <p className="text-[10px] font-black text-slate-900 uppercase">Vision Pro</p>
-            <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Actif</p>
-          </div>
-          <div className="text-center">
-            <p className="text-[10px] font-black text-slate-900 uppercase">256-bit</p>
-            <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Encodé</p>
-          </div>
         </div>
       </div>
     </div>
