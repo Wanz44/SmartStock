@@ -2,7 +2,7 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Product, InventoryLog, RapportAutomatique } from "../types";
 
-// Get professional logistics report from Gemini
+// Get professional logistics report from Automatic system
 export const getProfessionalReport = async (products: Product[], history: InventoryLog[]): Promise<RapportAutomatique> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const prompt = `
@@ -45,12 +45,12 @@ export const getProfessionalReport = async (products: Product[], history: Invent
     report.generatedAt = new Date().toISOString();
     return report;
   } catch (error) {
-    console.error("Erreur Rapport IA:", error);
+    console.error("Erreur Rapport Automatique:", error);
     throw error;
   }
 };
 
-// Extract inventory data from documents or images using Gemini Vision with intelligent classification
+// Extract inventory data from documents or images using Automatic Vision with intelligent classification
 export const extractDataFromFile = async (base64Data: string, mimeType: string): Promise<Partial<Product>[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
@@ -115,12 +115,12 @@ export const extractDataFromFile = async (base64Data: string, mimeType: string):
     });
     return JSON.parse(response.text || '[]');
   } catch (error) {
-    console.error("Erreur Extraction Vision:", error);
+    console.error("Erreur Extraction Vision Automatique:", error);
     return [];
   }
 };
 
-// Generate high-quality product images for the studio using Gemini 3 Pro
+// Generate high-quality product images for the studio using Automatic system
 export const generateProductImage = async (description: string) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
@@ -149,7 +149,7 @@ export const generateProductImage = async (description: string) => {
     }
     return null;
   } catch (error) {
-    console.error("Erreur Studio Photo:", error);
+    console.error("Erreur Studio Photo Automatique:", error);
     return null;
   }
 };

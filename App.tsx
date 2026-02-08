@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, Package, History as HistoryIcon, Plus, AlertTriangle, 
   Trash2, Search, X, DollarSign, Settings as SettingsIcon, Edit2, 
@@ -11,7 +11,7 @@ import {
   Activity, FileSpreadsheet, ChevronDown, FileDown, Wand2, Zap, MapPin,
   Building2, HardDrive, SearchCode, ScanFace, DatabaseZap, Filter, TrendingDown,
   ChevronUp, ChevronDown as ChevronDownIcon, Layers, MoreHorizontal,
-  PlusCircle, Check, LogOut, Info
+  PlusCircle, Check, LogOut, Info, FileUp
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -50,6 +50,8 @@ const App: React.FC = () => {
   const [importData, setImportData] = useState<Partial<Product>[]>([]);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // État pour la confirmation d'action
   const [confirmModal, setConfirmModal] = useState<{
@@ -236,6 +238,97 @@ const App: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const handleManualCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const lines = content.split(/\r?\n/);
+      
+      const parsedData: Partial<Product>[] = lines.slice(1).filter(line => line.trim()).map(line => {
+        const values = line.split(/[;,]/);
+        return {
+          name: values[0]?.trim() || "Article sans nom",
+          category: values[1]?.trim() || "Autre",
+          currentStock: parseInt(values[2]) || 0,
+          unitPrice: parseInt(values[3]) || 0,
+          unit: values[4]?.trim() || "unités"
+        };
+      });
+
+      if (parsedData.length > 0) {
+        setConfirmModal({
+          isOpen: true,
+          title: "Importation CSV détectée",
+          message: `Voulez-vous importer manuellement ${parsedData.length} articles dans le registre ? (Format attendu: Nom, Catégorie, Stock, Prix, Unité)`,
+          type: 'info',
+          onConfirm: () => {
+            const newProducts: Product[] = parsedData.map((item, idx) => ({
+              id: `csv-${Date.now()}-${idx}`,
+              name: item.name!,
+              category: INITIAL_CATEGORIES.includes(item.category!) ? item.category! : "Autre",
+              currentStock: item.currentStock || 0,
+              minStock: 10,
+              monthlyNeed: 0,
+              unit: item.unit || "unités",
+              unitPrice: item.unitPrice || 0,
+              currency: 'Fc',
+              siteId: 'S1',
+              lastInventoryDate: new Date().toISOString()
+            }));
+
+            setProducts(prev => [...prev, ...newProducts]);
+            newProducts.forEach(p => {
+              addHistoryLog('entry', p.id, p.name, p.currentStock, p.currentStock, "Import manuel via fichier CSV");
+            });
+            showToast(`${newProducts.length} articles importés avec succès`);
+            setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          }
+        });
+      } else {
+        showToast("Le fichier CSV semble vide ou mal formé", "error");
+      }
+    };
+    reader.readAsText(file);
+    if (e.target) e.target.value = '';
+  };
+
+  const handleManualCsvExport = () => {
+    if (products.length === 0) {
+      showToast("Aucune donnée à exporter", "error");
+      return;
+    }
+
+    const headers = ["Désignation", "Catégorie", "Stock Actuel", "Prix Unitaire", "Unité", "Site", "Dernier Inventaire"];
+    const rows = products.map(p => [
+      p.name,
+      p.category,
+      p.currentStock.toString(),
+      p.unitPrice.toString(),
+      p.unit,
+      p.siteId,
+      new Date(p.lastInventoryDate).toLocaleDateString()
+    ]);
+
+    const csvContent = [
+      headers.join(";"),
+      ...rows.map(row => row.join(";"))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `SmartStock_Inventaire_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Registre exporté au format CSV");
+  };
+
   const handleAiReport = async () => {
     setIsAiLoading(true);
     try {
@@ -332,7 +425,7 @@ const App: React.FC = () => {
 
   const ExtractionLoader = () => (
     <div className="fixed inset-0 z-[400] bg-slate-900/40 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-500">
-      <div className="bg-white w-full max-w-xl rounded-[4rem] p-16 shadow-2xl text-center space-y-12 border animate-in zoom-in-95 duration-500">
+      <div className="bg-white w-full max-xl rounded-[4rem] p-16 shadow-2xl text-center space-y-12 border animate-in zoom-in-95 duration-500">
         <div className="relative w-32 h-32 mx-auto">
           <div className="absolute inset-0 bg-emerald-100 rounded-[2.5rem] animate-pulse" />
           <div className="absolute inset-4 bg-white rounded-[2rem] flex items-center justify-center shadow-inner">
@@ -343,7 +436,7 @@ const App: React.FC = () => {
           </div>
         </div>
         <div className="space-y-4">
-          <h3 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Extraction IA Pro</h3>
+          <h3 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Extraction Automatique Pro</h3>
           <div className="h-6 overflow-hidden">
             <p className="text-[11px] font-black text-emerald-600 uppercase tracking-[0.2em] animate-in slide-in-from-bottom-2">
               {loadingMessages[loadingStep]}
@@ -439,6 +532,13 @@ const App: React.FC = () => {
 
     return (
       <div className="space-y-8 animate-in fade-in duration-500">
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          className="hidden" 
+          accept=".csv,.txt"
+          onChange={handleManualCsvImport} 
+        />
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white p-6 border rounded-[2rem] shadow-sm flex items-center gap-4">
             <div className="p-3 bg-slate-50 text-slate-400 rounded-2xl"><Layers className="w-5 h-5" /></div>
@@ -481,7 +581,7 @@ const App: React.FC = () => {
               className="w-full pl-14 pr-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium text-xs text-slate-900 focus:bg-white transition-all border-2 border-transparent focus:border-emerald-500/10"
             />
           </div>
-          <div className="flex gap-4 w-full lg:w-auto">
+          <div className="flex gap-3 w-full lg:w-auto">
             <div className="relative flex-1 lg:flex-none">
               <Filter className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 w-3 h-3" />
               <select 
@@ -493,8 +593,22 @@ const App: React.FC = () => {
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 w-3 h-3 pointer-events-none" />
             </div>
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              className="px-6 py-4 bg-white border-2 border-slate-50 text-slate-600 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-slate-50 transition-all shadow-sm"
+              title="Importer un fichier CSV"
+            >
+              <FileUp className="w-4 h-4" /> Import CSV
+            </button>
+            <button 
+              onClick={handleManualCsvExport}
+              className="px-6 py-4 bg-white border-2 border-slate-50 text-slate-600 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-slate-50 transition-all shadow-sm"
+              title="Exporter au format CSV"
+            >
+              <FileDown className="w-4 h-4" /> Export CSV
+            </button>
             <button onClick={() => handleOpenEditModal(null)} className="px-8 py-4 bg-[#143d21] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-lg hover:bg-black transition-all">
-              <Plus className="w-4 h-4" /> Ajouter Consommable
+              <Plus className="w-4 h-4" /> Ajouter
             </button>
           </div>
         </div>
@@ -928,7 +1042,7 @@ const App: React.FC = () => {
       {aiReport ? (
         <div className="bg-white w-full max-w-4xl rounded-[4rem] p-12 shadow-2xl border-t-8 border-[#143d21] space-y-8 overflow-y-auto max-h-[80vh] animate-modal">
           <div className="flex justify-between items-center">
-             <h3 className="text-2xl font-black italic uppercase tracking-tighter">Rapport d'Audit IA</h3>
+             <h3 className="text-2xl font-black italic uppercase tracking-tighter">Rapport d'Audit Automatique</h3>
              <button onClick={() => setAiReport(null)} className="p-4 bg-slate-100 rounded-2xl hover:bg-rose-50 hover:text-rose-500 transition-all"><X className="w-6 h-6" /></button>
           </div>
           <div className="space-y-6 text-left">
@@ -961,7 +1075,7 @@ const App: React.FC = () => {
           <div className="w-24 h-24 bg-emerald-50 rounded-3xl flex items-center justify-center mx-auto shadow-inner"><BarChart3 className="w-12 h-12 text-[#143d21]" /></div>
           <div className="space-y-4">
             <h3 className="text-4xl font-black italic uppercase tracking-tighter leading-none">Certification Logistique Automatique</h3>
-            <p className="text-slate-500 font-medium max-w-md mx-auto leading-relaxed">Analyse instantanée de vos données locales par l'IA Gemini.</p>
+            <p className="text-slate-500 font-medium max-w-md mx-auto leading-relaxed">Analyse instantanée de vos données locales par l'Automatique.</p>
           </div>
           <button onClick={handleAiReport} disabled={isAiLoading || products.length === 0} className="px-12 py-6 bg-[#143d21] text-white rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl flex items-center justify-center gap-4 mx-auto hover:bg-black transition-all disabled:opacity-50">
             {isAiLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
@@ -997,7 +1111,7 @@ const App: React.FC = () => {
             <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center shadow-inner"><ImageIcon className="w-8 h-8 text-[#143d21]" /></div>
             <div className="space-y-1">
               <h3 className="text-2xl font-black italic uppercase tracking-tighter leading-none">Studio Photo Automatique</h3>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Génération de visuels catalogue par IA</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Génération de visuels catalogue par Automatique</p>
             </div>
           </div>
           <textarea 
@@ -1043,7 +1157,7 @@ const App: React.FC = () => {
             <p className="text-[11px] font-black text-emerald-600 uppercase tracking-[0.5em] italic">Enterprise Logistical Operating System • v4.0</p>
           </div>
           <p className="text-slate-400 text-sm font-medium max-w-sm mx-auto leading-relaxed">
-            Bienvenue dans votre plateforme de gestion de stock intelligente. Connectez-vous pour accéder à vos inventaires et audits IA.
+            Bienvenue dans votre plateforme de gestion de stock intelligente. Connectez-vous pour accéder à vos inventaires et audits Automatiques.
           </p>
         </div>
 
@@ -1152,7 +1266,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[350] flex items-center justify-center p-8 bg-slate-900/80 backdrop-blur-md animate-in fade-in">
            <div className="bg-white w-full max-w-5xl rounded-[4rem] p-12 shadow-2xl flex flex-col max-h-[90vh] animate-modal">
               <div className="flex justify-between items-center mb-10 shrink-0">
-                 <div><h3 className="text-3xl font-black italic uppercase tracking-tighter leading-none">Vérification Import IA</h3><p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-1">Validez les données extraites et leur classification.</p></div>
+                 <div><h3 className="text-3xl font-black italic uppercase tracking-tighter leading-none">Vérification Import Automatique</h3><p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-1">Validez les données extraites et leur classification.</p></div>
                  <button onClick={() => setIsReviewOpen(false)} className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:bg-rose-50 hover:text-rose-500 transition-all"><X className="w-6 h-6" /></button>
               </div>
               <div className="flex-1 overflow-y-auto pr-4 mb-10">
@@ -1160,7 +1274,7 @@ const App: React.FC = () => {
                   <thead className="bg-slate-50 sticky top-0 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     <tr>
                       <th className="px-6 py-4">Désignation</th>
-                      <th className="px-6 py-4 text-center">Catégorie IA</th>
+                      <th className="px-6 py-4 text-center">Catégorie Automatique</th>
                       <th className="px-6 py-4 text-center">Qté</th>
                       <th className="px-6 py-4 text-right">Prix</th>
                     </tr>
