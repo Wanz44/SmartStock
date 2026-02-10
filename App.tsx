@@ -14,7 +14,8 @@ import {
   FileSearch,
   AlertCircle,
   Coins,
-  ClipboardList
+  ClipboardList,
+  FileUp
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -152,9 +153,10 @@ const WorkflowCard = ({ icon: Icon, label, onClick }: any) => (
   </button>
 );
 
-const InventoryView = ({ products, searchTerm, setSearchTerm, setIsEditModalOpen, setEditingProduct, handleExport, exchangeRate }: any) => {
+const InventoryView = ({ products, searchTerm, setSearchTerm, setIsEditModalOpen, setEditingProduct, handleExport, exchangeRate, onImportSuccess, showToast }: any) => {
   const [filterCategory, setFilterCategory] = useState('TOUTES');
   const [filterStatus, setFilterStatus] = useState('TOUS');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
     return products.filter((p: any) => {
@@ -170,6 +172,34 @@ const InventoryView = ({ products, searchTerm, setSearchTerm, setIsEditModalOpen
     const price = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
     return acc + (p.currentStock * price);
   }, 0);
+
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const items = parseInventoryData(content);
+      if (items.length > 0) {
+        const newProducts = items.map(item => ({
+          ...item,
+          id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          minStock: 5,
+          monthlyNeed: 0,
+          siteId: 'S1',
+          lastInventoryDate: new Date().toISOString()
+        }));
+        onImportSuccess(newProducts as Product[]);
+        showToast(`${newProducts.length} articles importés par fichier CSV`);
+      } else {
+        showToast("Le format du fichier semble incorrect ou vide", "error");
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   return (
     <div className="space-y-10 animate-fade-in">
@@ -215,8 +245,24 @@ const InventoryView = ({ products, searchTerm, setSearchTerm, setIsEditModalOpen
         </div>
 
         <div className="flex gap-4">
-          <button onClick={() => handleExport()} className="px-10 py-5 bg-emerald-50 text-emerald-800 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-emerald-100 transition-all border border-emerald-100">
-            <Download className="w-4 h-4" /> Export CSV
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileImport} 
+            accept=".csv,.txt" 
+            className="hidden" 
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="px-10 py-5 bg-emerald-50 text-emerald-800 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-emerald-100 transition-all border border-emerald-100"
+          >
+            <FileUp className="w-4 h-4" /> Importer
+          </button>
+          <button 
+            onClick={() => handleExport()} 
+            className="px-10 py-5 bg-slate-50 text-slate-700 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-slate-100 transition-all border border-slate-200"
+          >
+            <Download className="w-4 h-4" /> Export
           </button>
           <button 
             onClick={() => { setEditingProduct(null); setIsEditModalOpen(true); }}
@@ -822,7 +868,7 @@ const App: React.FC = () => {
       responsible: "Admin Pro"
     }));
     setHistory(prev => [...prev, ...newLogs]);
-    setActiveView('inventory');
+    if (activeView === 'import') setActiveView('inventory');
   };
 
   const handleSaveProduct = () => {
@@ -956,7 +1002,7 @@ const App: React.FC = () => {
 
         <div className="pb-32">
           {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} setActiveView={setActiveView} exchangeRate={exchangeRate} />}
-          {activeView === 'inventory' && <InventoryView products={products} searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleExport={handleExportCSV} setIsEditModalOpen={setIsEditModalOpen} setEditingProduct={setEditingProduct} exchangeRate={exchangeRate} />}
+          {activeView === 'inventory' && <InventoryView products={products} searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleExport={handleExportCSV} setIsEditModalOpen={setIsEditModalOpen} setEditingProduct={setEditingProduct} exchangeRate={exchangeRate} onImportSuccess={handleImportSuccess} showToast={showToast} />}
           {activeView === 'furniture' && <FurnitureView furniture={furniture} searchTerm={searchTerm} setSearchTerm={setSearchTerm} setIsEditModalOpen={setIsEditModalOpen} setEditingFurniture={setEditingFurniture} />}
           {activeView === 'history' && <HistoryView history={history} searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleExport={handleExportAuditCSV} />}
           {activeView === 'monthly_report' && <ReportingView products={products} history={history} exchangeRate={exchangeRate} />}
