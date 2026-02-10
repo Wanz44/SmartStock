@@ -1,25 +1,28 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  LayoutDashboard, Package, History as HistoryIcon, Plus, AlertTriangle, 
+  LayoutDashboard, Box, History as HistoryIcon, Plus, AlertTriangle, 
   Trash2, Search, X, DollarSign, Settings as SettingsIcon, Edit2, 
   Sparkles, Loader2, ShieldAlert, ShieldCheck, 
   Armchair, FileText, Camera, Upload, 
-  Image as ImageIcon, ChevronRight, Globe,
-  Box, Printer, User, ArrowRightLeft, 
-  BarChart3, Shield, Cpu, Database, Save, RefreshCw, Lock,
-  Activity, FileSpreadsheet, ChevronDown, FileDown, Wand2, Zap, MapPin,
-  Building2, HardDrive, SearchCode, ScanFace, DatabaseZap, Filter, TrendingDown,
-  ChevronUp, ChevronDown as ChevronDownIcon, Layers, MoreHorizontal,
-  PlusCircle, Check, LogOut, Info, FileUp, FileSpreadsheet as ExcelIcon
+  ImageIcon, Globe, Activity, FileSpreadsheet,
+  Printer, User, ArrowRightLeft, Factory, Truck, MapPin, 
+  BrainCircuit, Microscope, Wand2, Zap, ScanFace, LogOut, ChevronDown, ChevronUp, Filter,
+  BarChart as BarChartIcon, PieChart as PieChartIcon, 
+  CheckCircle2, ChevronRight, Info, Database, Shield, Laptop, 
+  Settings2, Wrench, Download, Calendar, Clock, TrendingUp,
+  FileSearch,
+  AlertCircle,
+  Coins,
+  ClipboardList
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, AreaChart, Area, Legend
+  Cell, PieChart, Pie, Legend 
 } from 'recharts';
-import { Product, InventoryLog, ViewType, Site, Furniture, RapportAutomatique } from './types';
+import { Product, InventoryLog, ViewType, Site, Furniture, RapportAutomatique, Supplier } from './types';
 import { INITIAL_PRODUCTS, INITIAL_FURNITURE, INITIAL_CATEGORIES } from './constants';
-import { getProfessionalReport, extractDataFromFile, generateProductImage } from './services/geminiService';
+import { getAutomatedReport, parseInventoryData } from './services/automationService';
 
 const getStored = <T,>(key: string, defaultValue: T): T => {
   const saved = localStorage.getItem(key);
@@ -27,1211 +30,880 @@ const getStored = <T,>(key: string, defaultValue: T): T => {
   try { return JSON.parse(saved); } catch (e) { return defaultValue; }
 };
 
-declare const window: any;
+// --- Professional UI Components ---
+
+const Badge = ({ status }: { status: string }) => {
+  const styles: Record<string, string> = {
+    OPTIMAL: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    CRITIQUE: "bg-rose-50 text-rose-700 border-rose-100",
+    RÉAPPRO: "bg-amber-50 text-amber-700 border-amber-100",
+    VÉROUILLÉ: "bg-slate-100 text-slate-600 border-slate-200",
+    NEUF: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    BON: "bg-blue-50 text-blue-700 border-blue-100",
+    USÉ: "bg-amber-50 text-amber-700 border-amber-100",
+    ENDOMMAGÉ: "bg-rose-50 text-rose-700 border-rose-100",
+    ENTRY: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    EXIT: "bg-rose-50 text-rose-700 border-rose-100",
+    TRANSFER: "bg-blue-50 text-blue-700 border-blue-100",
+    ADJUSTMENT: "bg-slate-100 text-slate-600 border-slate-200"
+  };
+  return (
+    <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter border flex items-center gap-1 w-max ${styles[status] || styles.OPTIMAL}`}>
+      <div className={`w-1 h-1 rounded-full ${['CRITIQUE', 'ENDOMMAGÉ', 'RÉAPPRO', 'EXIT'].includes(status) ? (status === 'RÉAPPRO' ? 'bg-amber-600' : 'bg-rose-600') : 'bg-current'}`} />
+      {status}
+    </div>
+  );
+};
+
+const NavItem = ({ active, onClick, icon: Icon, label }: any) => (
+  <button 
+    onClick={onClick} 
+    className={`w-full flex items-center gap-4 px-8 py-5 rounded-full font-black uppercase text-[10px] tracking-widest transition-all ${active ? 'bg-white text-[#143d21] shadow-xl scale-[1.02]' : 'text-white/60 hover:bg-white/5 hover:text-white translate-x-0 hover:translate-x-1'}`}
+  >
+    <Icon className={`w-4 h-4 ${active ? 'text-[#143d21]' : ''}`} />
+    {label}
+  </button>
+);
+
+// --- Sub-Views ---
+
+const DashboardView = ({ products, furniture, history, setActiveView, exchangeRate }: any) => {
+  const totalVal = products.reduce((a: any, b: any) => {
+    const price = b.currency === '$' ? b.unitPrice * exchangeRate : b.unitPrice;
+    return a + (b.currentStock * price);
+  }, 0);
+  const totalAssets = furniture.reduce((a: any, b: any) => a + (b.purchasePrice || 0), 0);
+  const ruptures = products.filter((p: any) => p.currentStock <= p.minStock).length;
+
+  return (
+    <div className="space-y-10 animate-fade-in">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <StatCard label="Valeur Consommables" value={`${totalVal.toLocaleString()} Fc`} icon={DollarSign} badge="RÉEL" />
+        <StatCard label="Patrimoine Immobilisé" value={`${totalAssets.toLocaleString()} Fc`} icon={Database} badge={furniture.length > 0 ? "ACTIF" : "VIDE"} />
+        <StatCard label="Ruptures de Stock" value={ruptures} icon={AlertTriangle} alert={ruptures > 0} />
+        <StatCard label="Actifs Gérés" value={furniture.length} icon={Armchair} badge="OPÉ" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-2 bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-10 flex justify-between items-center border-b border-slate-50">
+            <h3 className="text-xs font-black uppercase italic tracking-widest text-slate-500 flex items-center gap-3">
+              <Activity className="w-4 h-4" /> Flux de Stock Récents
+            </h3>
+            <button onClick={() => setActiveView('history')} className="text-[8px] font-black uppercase underline tracking-widest text-slate-900">Journal Complet</button>
+          </div>
+          <div className="flex-1 overflow-y-auto max-h-[500px] p-6 space-y-2">
+            {history.slice(-10).reverse().map((log: any) => (
+              <div key={log.id} className="flex items-center justify-between p-6 bg-slate-50/50 rounded-2xl group hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${log.changeAmount > 0 ? 'bg-emerald-50 text-emerald-500' : 'bg-slate-200 text-slate-500'}`}>
+                    {log.changeAmount > 0 ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h5 className="text-[11px] font-black uppercase text-slate-900">{log.productName}</h5>
+                    <p className="text-[8px] font-bold text-slate-500 uppercase tabular-nums">{new Date(log.date).toLocaleTimeString('fr-FR')}</p>
+                  </div>
+                </div>
+                <div className={`text-sm font-black italic ${log.changeAmount > 0 ? 'text-emerald-500' : 'text-slate-900'}`}>
+                  {log.changeAmount > 0 ? `+${log.changeAmount}` : log.changeAmount}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <h3 className="text-[10px] font-black uppercase italic tracking-widest text-slate-500 px-4">Actions Rapides</h3>
+          <WorkflowCard onClick={() => setActiveView('monthly_report')} icon={FileText} label="Générer Rapport Statistique" />
+          <WorkflowCard onClick={() => setActiveView('import')} icon={FileSpreadsheet} label="Importation de Données" />
+          <WorkflowCard onClick={() => setActiveView('furniture')} icon={Armchair} label="Inventaire Mobilier" />
+          
+          <div className="mt-10 p-10 bg-[#143d21] rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
+            <ShieldCheck className="w-8 h-8 mb-6 text-emerald-400" />
+            <h5 className="text-[11px] font-black uppercase tracking-widest mb-2 italic">Données Sécurisées</h5>
+            <p className="text-[9px] font-medium text-emerald-100/70 leading-relaxed uppercase italic">Calculs algorithmiques locaux. Pas de dépendance externe.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const StatCard = ({ label, value, icon: Icon, alert, badge }: any) => (
+  <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
+    <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-6 ${alert ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-400'}`}><Icon className="w-5 h-5" /></div>
+    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{label}</p>
+    <div className="flex justify-between items-end">
+      <h4 className={`text-3xl font-black italic tracking-tighter leading-none ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h4>
+      {badge && <span className="text-[8px] font-black px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">{badge}</span>}
+    </div>
+  </div>
+);
+
+const WorkflowCard = ({ icon: Icon, label, onClick }: any) => (
+  <button onClick={onClick} className="w-full p-6 bg-white border border-slate-100 rounded-[2rem] shadow-sm flex items-center justify-between group hover:border-[#143d21] transition-all">
+    <div className="flex items-center gap-4">
+      <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center group-hover:bg-[#143d21] group-hover:text-white transition-all">
+        <Icon className="w-5 h-5" />
+      </div>
+      <span className="text-[10px] font-black uppercase italic tracking-tight text-slate-900">{label}</span>
+    </div>
+    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-900 transition-colors" />
+  </button>
+);
+
+const InventoryView = ({ products, searchTerm, setSearchTerm, setIsEditModalOpen, setEditingProduct, handleExport, exchangeRate }: any) => {
+  const [filterCategory, setFilterCategory] = useState('TOUTES');
+  const [filterStatus, setFilterStatus] = useState('TOUS');
+
+  const filtered = useMemo(() => {
+    return products.filter((p: any) => {
+      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = filterCategory === 'TOUTES' || p.category === filterCategory;
+      const status = p.currentStock === 0 ? 'CRITIQUE' : (p.currentStock <= p.minStock ? 'RÉAPPRO' : 'OPTIMAL');
+      const matchesStatus = filterStatus === 'TOUS' || status === filterStatus;
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [products, searchTerm, filterCategory, filterStatus]);
+
+  const totalValue = filtered.reduce((acc: number, p: any) => {
+    const price = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
+    return acc + (p.currentStock * price);
+  }, 0);
+
+  return (
+    <div className="space-y-10 animate-fade-in">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <InventoryStat label="Articles Filtrés" value={filtered.length} icon={Box} />
+        <InventoryStat label="Valeur du Filtre" value={`${totalValue.toLocaleString()} Fc`} icon={DollarSign} />
+        <InventoryStat label="Alertes Stock" value={filtered.filter((p:any) => p.currentStock <= p.minStock).length} icon={Zap} alert={filtered.some((p:any) => p.currentStock <= p.minStock)} />
+        <InventoryStat label="Ruptures" value={filtered.filter((p:any) => p.currentStock === 0).length} icon={ShieldAlert} alert={filtered.some((p:any) => p.currentStock === 0)} />
+      </div>
+
+      <div className="flex flex-col xl:flex-row gap-6 bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm no-print">
+        <div className="flex-1 flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1 group">
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-[#143d21] transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Chercher désignation, SKU..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-14 pr-6 py-5 bg-slate-50 border-none rounded-[1.5rem] text-xs font-black uppercase tracking-widest outline-none ring-offset-0 focus:ring-2 ring-[#143d21]/10 transition-all text-slate-900"
+            />
+          </div>
+          
+          <select 
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="px-8 py-5 bg-slate-50 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest outline-none appearance-none cursor-pointer hover:bg-slate-100 transition-colors text-slate-800"
+          >
+            <option value="TOUTES">Catégories: Toutes</option>
+            {INITIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+
+          <select 
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-8 py-5 bg-slate-50 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest outline-none appearance-none cursor-pointer hover:bg-slate-100 transition-colors text-slate-800"
+          >
+            <option value="TOUS">Statuts: Tous</option>
+            <option value="OPTIMAL">Statut: Optimal</option>
+            <option value="RÉAPPRO">Statut: Réappro</option>
+            <option value="CRITIQUE">Statut: Critique</option>
+          </select>
+        </div>
+
+        <div className="flex gap-4">
+          <button onClick={() => handleExport()} className="px-10 py-5 bg-emerald-50 text-emerald-800 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-emerald-100 transition-all border border-emerald-100">
+            <Download className="w-4 h-4" /> Export CSV
+          </button>
+          <button 
+            onClick={() => { setEditingProduct(null); setIsEditModalOpen(true); }}
+            className="px-10 py-5 bg-[#143d21] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 hover:scale-[1.02] transition-all"
+          >
+            <Plus className="w-5 h-5" /> Nouvel Article
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50/70 border-b border-slate-100">
+            <tr className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em]">
+              <th className="px-12 py-10">Référence / Produit</th>
+              <th className="px-8 py-10">Classification</th>
+              <th className="px-8 py-10">Inventaire / Seuil</th>
+              <th className="px-8 py-10">Disponibilité</th>
+              <th className="px-8 py-10 text-right">Valo. Unitaire</th>
+              <th className="px-12 py-10 text-right">Valo. Totale</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-12 py-40 text-center">
+                  <div className="max-w-xs mx-auto space-y-6 opacity-40">
+                    <Database className="w-20 h-20 mx-auto text-slate-400" />
+                    <p className="text-[11px] font-black uppercase italic tracking-widest text-slate-600">Aucun registre correspondant</p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              filtered.map((p: any) => {
+                const priceInFc = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
+                return (
+                  <tr key={p.id} className="group hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => { setEditingProduct(p); setIsEditModalOpen(true); }}>
+                    <td className="px-12 py-10">
+                      <div className="flex items-center gap-6">
+                        <div className="w-14 h-14 bg-slate-200 rounded-[1.2rem] flex items-center justify-center text-slate-500 group-hover:bg-white group-hover:shadow-sm transition-all overflow-hidden">
+                          <Box className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-[7px] font-black text-slate-500 uppercase tracking-tighter mb-1">SKU-{p.id.slice(-8).toUpperCase()}</p>
+                          <h5 className="text-[13px] font-black italic uppercase text-slate-900 leading-none">{p.name}</h5>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-10">
+                      <p className="text-[10px] font-black text-slate-900 uppercase leading-none mb-1.5">{p.category}</p>
+                      <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Entrepôt Central</p>
+                    </td>
+                    <td className="px-8 py-10">
+                      <div className="flex items-baseline gap-1.5 leading-none mb-2">
+                        <span className={`text-xl font-black italic tabular-nums ${p.currentStock <= p.minStock ? 'text-rose-600' : 'text-slate-900'}`}>{p.currentStock}</span>
+                        <span className="text-[9px] font-black text-slate-400">/ {p.minStock}</span>
+                      </div>
+                      <div className="w-16 h-1 bg-slate-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${p.currentStock === 0 ? 'bg-rose-600' : (p.currentStock <= p.minStock ? 'bg-amber-400' : 'bg-emerald-500')}`} 
+                          style={{ width: `${Math.min(100, (p.currentStock / (p.minStock * 2 || 10)) * 100)}%` }} 
+                        />
+                      </div>
+                    </td>
+                    <td className="px-8 py-10">
+                      <Badge status={p.currentStock === 0 ? 'CRITIQUE' : (p.currentStock <= p.minStock ? 'RÉAPPRO' : 'OPTIMAL')} />
+                    </td>
+                    <td className="px-8 py-10 text-right">
+                      <p className="text-[11px] font-black italic text-slate-900 tabular-nums leading-none mb-1.5">{p.unitPrice.toLocaleString()} {p.currency}</p>
+                      <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Par {p.unit || 'Pièce'}</p>
+                    </td>
+                    <td className="px-12 py-10 text-right">
+                      <p className="text-[15px] font-black italic text-[#143d21] tabular-nums leading-none mb-1.5">{(p.currentStock * priceInFc).toLocaleString()} Fc</p>
+                      <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest italic opacity-0 group-hover:opacity-100 transition-opacity">Valorisation Totale (Fc)</p>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// --- Reporting View ---
+const ReportingView = ({ products, history, exchangeRate }: { products: Product[], history: InventoryLog[], exchangeRate: number }) => {
+  const [report, setReport] = useState<RapportAutomatique | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const generateReport = async () => {
+    setLoading(true);
+    // Délai simulé pour le "moteur de calcul"
+    setTimeout(async () => {
+      try {
+        const data = await getAutomatedReport(products, history, exchangeRate);
+        setReport(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }, 1000);
+  };
+
+  useEffect(() => {
+    if (products.length > 0 && !report) {
+      generateReport();
+    }
+  }, [products]);
+
+  if (loading) return (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-10 animate-fade-in">
+      <Loader2 className="w-24 h-24 text-[#143d21] animate-spin" />
+      <div className="text-center space-y-3">
+        <h3 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Moteur de Calcul Statistique</h3>
+        <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.3em] italic">Analyse déterministe des flux en cours...</p>
+      </div>
+    </div>
+  );
+
+  if (!report) return (
+    <div className="bg-white p-24 rounded-[4rem] border border-slate-100 shadow-sm text-center space-y-12">
+      <FileSearch className="w-20 h-20 text-slate-200 mx-auto" />
+      <div className="space-y-4">
+        <h4 className="text-3xl font-black italic uppercase text-slate-900">Aucun rapport disponible</h4>
+        <p className="text-slate-500 text-sm uppercase font-black italic tracking-widest">Lancez l'audit statistique pour analyser vos stocks.</p>
+      </div>
+      <button onClick={generateReport} className="px-16 py-6 bg-[#143d21] text-white rounded-[2.5rem] font-black uppercase text-[11px] tracking-widest shadow-2xl hover:scale-105 transition-all">Générer l'Audit</button>
+    </div>
+  );
+
+  return (
+    <div className="space-y-10 animate-fade-in pb-20">
+      <div className="flex justify-between items-center no-print">
+        <h3 className="text-xs font-black uppercase italic tracking-widest text-slate-500 flex items-center gap-3">
+          <Database className="w-4 h-4 text-emerald-600" /> Audit Statistique SmartStock Pro
+        </h3>
+        <div className="flex gap-4">
+           <button onClick={() => window.print()} className="px-8 py-4 bg-white border border-slate-100 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-sm hover:bg-slate-50 flex items-center gap-3">
+             <Printer className="w-4 h-4" /> PDF
+           </button>
+           <button onClick={generateReport} className="px-8 py-4 bg-emerald-50 text-emerald-800 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest hover:bg-emerald-100 flex items-center gap-3">
+             <RefreshCcw className="w-4 h-4" /> Actualiser
+           </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-2 space-y-10">
+          <section className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm space-y-8">
+            <h4 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Résumé Analytique</h4>
+            <div className="p-10 bg-slate-50 rounded-[2.5rem] border-l-8 border-[#143d21]">
+              <p className="text-slate-700 leading-relaxed font-medium italic text-lg uppercase tracking-tight">
+                {report.summary}
+              </p>
+            </div>
+          </section>
+
+          <section className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm space-y-10">
+             <div className="flex justify-between items-center">
+               <h4 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Valorisation par Catégorie</h4>
+               <TrendingUp className="w-8 h-8 text-emerald-600" />
+             </div>
+             <div className="h-[400px] w-full bg-slate-50/50 p-8 rounded-[3rem]">
+               <ResponsiveContainer width="100%" height="100%">
+                 <BarChart data={report.chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#fff', borderRadius: '20px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)' }}
+                      itemStyle={{ fontWeight: 900, color: '#143d21' }}
+                    />
+                    <Bar dataKey="valeur" radius={[10, 10, 0, 0]}>
+                      {report.chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#143d21' : '#10b981'} />
+                      ))}
+                    </Bar>
+                 </BarChart>
+               </ResponsiveContainer>
+             </div>
+          </section>
+
+          <section className="space-y-6">
+            <h4 className="text-xl font-black italic uppercase tracking-widest text-slate-900 px-4">Actions Prioritaires</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {report.recommendations.map((rec, i) => (
+                <div key={i} className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-start gap-6 group hover:border-[#143d21] transition-all">
+                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-[#143d21] group-hover:text-white transition-all">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <p className="text-[11px] font-black uppercase italic text-slate-700 tracking-tight leading-relaxed">{rec}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <div className="space-y-10">
+          <div className="bg-rose-50 p-10 rounded-[3.5rem] border-2 border-rose-100 space-y-8">
+            <div className="flex items-center gap-4 text-rose-700">
+              <AlertCircle className="w-8 h-8" />
+              <h5 className="text-xl font-black italic uppercase tracking-tighter">Alertes Systèmes</h5>
+            </div>
+            <div className="space-y-4">
+              {report.criticalAlerts.map((alert, i) => (
+                <div key={i} className="p-6 bg-white/60 rounded-2xl border border-rose-200">
+                  <p className="text-[10px] font-black uppercase italic text-rose-900 leading-tight">{alert}</p>
+                </div>
+              ))}
+              {report.criticalAlerts.length === 0 && (
+                 <p className="text-[10px] font-black uppercase italic text-rose-400">Aucun incident détecté.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-[#143d21] p-12 rounded-[4rem] text-white shadow-2xl space-y-10 relative overflow-hidden">
+             <div className="relative z-10 space-y-8">
+                <div className="flex items-center gap-4">
+                  <DollarSign className="w-8 h-8 text-emerald-400" />
+                  <h5 className="text-xl font-black italic uppercase tracking-tighter">Projection de Coûts</h5>
+                </div>
+                <div className="space-y-4">
+                   <p className="text-emerald-100/70 text-[10px] font-black uppercase tracking-[0.3em] italic leading-none">Estimation algorithmique</p>
+                   <p className="text-lg font-black italic leading-relaxed text-emerald-50">
+                     {report.financialProjection}
+                   </p>
+                </div>
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const RefreshCcw = ({ className }: any) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
+  </svg>
+);
+
+const HistoryView = ({ history, searchTerm, setSearchTerm, handleExport }: any) => {
+  const [period, setPeriod] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'ALL'>('ALL');
+
+  const filtered = useMemo(() => {
+    const now = new Date();
+    return history.filter((log: any) => {
+      const matchesSearch = log.productName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           (log.responsible || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const logDate = new Date(log.date);
+      let matchesPeriod = true;
+
+      if (period === 'DAY') {
+        matchesPeriod = logDate.toDateString() === now.toDateString();
+      } else if (period === 'WEEK') {
+        const weekAgo = new Date();
+        weekAgo.setDate(now.getDate() - 7);
+        matchesPeriod = logDate >= weekAgo;
+      } else if (period === 'MONTH') {
+        matchesPeriod = logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
+      } else if (period === 'YEAR') {
+        matchesPeriod = logDate.getFullYear() === now.getFullYear();
+      }
+
+      return matchesSearch && matchesPeriod;
+    });
+  }, [history, searchTerm, period]);
+
+  const stats = useMemo(() => {
+    const entries = filtered.filter((l:any) => l.changeAmount > 0).reduce((a:number, b:any) => a + b.changeAmount, 0);
+    const exits = filtered.filter((l:any) => l.changeAmount < 0).reduce((a:number, b:any) => a + Math.abs(b.changeAmount), 0);
+    return { entries, exits, total: filtered.length };
+  }, [filtered]);
+
+  return (
+    <div className="space-y-10 animate-fade-in">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <InventoryStat label="Mouvements Totaux" value={stats.total} icon={Activity} />
+        <InventoryStat label="Total Entrées" value={stats.entries} icon={ChevronUp} />
+        <InventoryStat label="Total Sorties" value={stats.exits} icon={ChevronDown} alert={stats.exits > stats.entries} />
+      </div>
+
+      <div className="flex flex-col xl:flex-row gap-6 bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm no-print">
+        <div className="flex-1 flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1 group">
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-[#143d21] transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Article, responsable..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-14 pr-6 py-5 bg-slate-50 border-none rounded-[1.5rem] text-xs font-black uppercase tracking-widest outline-none ring-offset-0 focus:ring-2 ring-[#143d21]/10 transition-all text-slate-900"
+            />
+          </div>
+          
+          <div className="flex bg-slate-50 p-1.5 rounded-[1.5rem] gap-1">
+            {(['DAY', 'WEEK', 'MONTH', 'YEAR', 'ALL'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${period === p ? 'bg-white text-[#143d21] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                {p === 'DAY' ? 'Jour' : p === 'WEEK' ? 'Semaine' : p === 'MONTH' ? 'Mois' : p === 'YEAR' ? 'Année' : 'Tous'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button onClick={() => handleExport()} className="px-10 py-5 bg-[#143d21] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 hover:scale-[1.02] transition-all">
+          <Download className="w-4 h-4" /> Rapport d'Audit
+        </button>
+      </div>
+
+      <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 border-b border-slate-100">
+            <tr className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
+              <th className="px-10 py-8">Horodatage & Type</th>
+              <th className="px-8 py-8">Article</th>
+              <th className="px-8 py-8 text-center">Quantité</th>
+              <th className="px-8 py-8 text-center">Final</th>
+              <th className="px-8 py-8">Responsable / Motif</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-10 py-32 text-center text-slate-400">
+                  <HistoryIcon className="w-16 h-16 mx-auto mb-6 opacity-20" />
+                  <p className="text-[10px] font-black uppercase tracking-widest italic">Aucun mouvement pour cette période</p>
+                </td>
+              </tr>
+            ) : (
+              filtered.reverse().map((log: any) => (
+                <tr key={log.id} className="group hover:bg-slate-50/50 transition-colors">
+                  <td className="px-10 py-8">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2 rounded-lg ${log.changeAmount > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                        {log.changeAmount > 0 ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black text-slate-900 uppercase leading-none mb-1">{new Date(log.date).toLocaleDateString()}</p>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{new Date(log.date).toLocaleTimeString()}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-8 text-sm font-black italic uppercase text-slate-900">{log.productName}</td>
+                  <td className="px-8 py-8 text-center font-black italic tabular-nums">
+                    <span className={log.changeAmount > 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                      {log.changeAmount > 0 ? '+' : ''}{log.changeAmount}
+                    </span>
+                  </td>
+                  <td className="px-8 py-8 text-center text-slate-400 font-black italic tabular-nums">{log.finalStock}</td>
+                  <td className="px-8 py-8">
+                    <p className="text-[9px] font-black text-slate-900 uppercase leading-none mb-1">{log.responsible || 'Sytème'}</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase italic tracking-tighter truncate max-w-[150px]">{log.reason || 'Std'}</p>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const InventoryStat = ({ label, value, icon: Icon, alert }: any) => (
+  <div className="bg-white px-8 py-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6">
+    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${alert ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-500'}`}><Icon className="w-5 h-5" /></div>
+    <div>
+      <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">{label}</p>
+      <h5 className={`text-xl font-black italic leading-none tabular-nums ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h5>
+    </div>
+  </div>
+);
+
+// --- Furniture View ---
+const FurnitureView = ({ furniture, searchTerm, setSearchTerm, setIsEditModalOpen, setEditingFurniture }: any) => {
+  const filtered = useMemo(() => {
+    return furniture.filter((f: any) => 
+      f.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (f.code || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [furniture, searchTerm]);
+
+  const totalValue = filtered.reduce((acc: number, f: any) => acc + (f.purchasePrice || 0), 0);
+
+  return (
+    <div className="space-y-10 animate-fade-in">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <InventoryStat label="Actifs Recensés" value={filtered.length} icon={Armchair} />
+        <InventoryStat label="Valeur Patrimoniale" value={`${totalValue.toLocaleString()} Fc`} icon={Database} />
+        <InventoryStat label="États Critiques" value={filtered.filter((f: any) => f.condition === 'Endommagé' || f.condition === 'Usé').length} icon={AlertTriangle} alert={filtered.some((f: any) => f.condition === 'Endommagé')} />
+      </div>
+
+      <div className="flex flex-col xl:flex-row gap-6 bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm no-print">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-[#143d21] transition-colors" />
+          <input 
+            type="text" 
+            placeholder="Désignation ou code inventaire..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-14 pr-6 py-5 bg-slate-50 border-none rounded-[1.5rem] text-xs font-black uppercase tracking-widest outline-none ring-offset-0 focus:ring-2 ring-[#143d21]/10 transition-all text-slate-900"
+          />
+        </div>
+        <button 
+          onClick={() => { setEditingFurniture(null); setIsEditModalOpen(true); }}
+          className="px-10 py-5 bg-[#143d21] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 hover:scale-[1.02] transition-all"
+        >
+          <Plus className="w-5 h-5" /> Nouvel Actif
+        </button>
+      </div>
+
+      <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 border-b border-slate-100">
+            <tr className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
+              <th className="px-10 py-8">Code & Désignation</th>
+              <th className="px-8 py-8">Affectation</th>
+              <th className="px-8 py-8">Condition</th>
+              <th className="px-10 py-8 text-right">Valeur d'Acquisition</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-10 py-32 text-center text-slate-400">
+                  <Armchair className="w-16 h-16 mx-auto mb-6 opacity-20" />
+                  <p className="text-[10px] font-black uppercase tracking-widest italic">Aucun actif enregistré</p>
+                </td>
+              </tr>
+            ) : (
+              filtered.map((f: any) => (
+                <tr key={f.id} className="group hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => { setEditingFurniture(f); setIsEditModalOpen(true); }}>
+                  <td className="px-10 py-8">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">{f.code}</p>
+                    <h5 className="text-[11px] font-black uppercase italic text-slate-900">{f.name}</h5>
+                  </td>
+                  <td className="px-8 py-8">
+                    <p className="text-[10px] font-black text-slate-900 uppercase">{f.assignedTo || 'Non affecté'}</p>
+                  </td>
+                  <td className="px-8 py-8">
+                    <Badge status={(f.condition || 'BON').toUpperCase()} />
+                  </td>
+                  <td className="px-10 py-8 text-right font-black italic text-slate-900">
+                    {(f.purchasePrice || 0).toLocaleString()} Fc
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const ImportView = ({ onImportSuccess, showToast }: any) => {
+  const [inputText, setInputText] = useState("");
+  const [previewItems, setPreviewItems] = useState<any[]>([]);
+
+  const handlePreview = () => {
+    const items = parseInventoryData(inputText);
+    setPreviewItems(items);
+    if (items.length > 0) {
+      showToast(`${items.length} articles identifiés dans le texte`);
+    } else {
+      showToast("Aucune donnée valide identifiée", "error");
+    }
+  };
+
+  const confirmImport = () => {
+    const newProducts = previewItems.map(item => ({
+      ...item,
+      id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      minStock: 5,
+      monthlyNeed: 0,
+      siteId: 'S1',
+      lastInventoryDate: new Date().toISOString()
+    }));
+    onImportSuccess(newProducts);
+    setPreviewItems([]);
+    setInputText("");
+    showToast(`${newProducts.length} articles importés avec succès`);
+  };
+
+  return (
+    <div className="space-y-10 animate-fade-in max-w-5xl mx-auto">
+      <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm space-y-8">
+        <div className="flex items-center gap-6">
+          <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center">
+            <ClipboardList className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Importation Automatisée</h3>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-relaxed">Collez vos données (Nom, Quantité, Prix, Catégorie, Unité) séparées par des points-virgules.</p>
+          </div>
+        </div>
+
+        <textarea 
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder="Ex: Coca;50;1500;Boisson;pces&#10;Riz 25kg;10;45000;Alimentaire;sac"
+          className="w-full h-48 p-8 bg-slate-50 border-none rounded-[2.5rem] font-mono text-sm outline-none focus:ring-2 ring-blue-500/10 transition-all text-slate-800 placeholder:opacity-40"
+        />
+
+        <div className="flex justify-end gap-4">
+          <button 
+            onClick={handlePreview}
+            className="px-10 py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all"
+          >
+            Analyser le texte
+          </button>
+        </div>
+      </div>
+
+      {previewItems.length > 0 && (
+        <div className="space-y-8 animate-fade-in">
+          <div className="bg-emerald-500 p-10 rounded-[3rem] text-white flex justify-between items-center shadow-xl">
+             <div>
+               <h4 className="text-2xl font-black italic uppercase tracking-tighter">Aperçu de l'importation</h4>
+               <p className="text-[10px] font-bold text-emerald-100/70 uppercase italic tracking-widest">Vérifiez les données avant intégration finale</p>
+             </div>
+             <button onClick={confirmImport} className="px-10 py-5 bg-white text-emerald-900 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-lg flex items-center gap-3">
+                <CheckCircle2 className="w-4 h-4" /> Valider l'importation
+             </button>
+          </div>
+
+          <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
+                  <th className="px-10 py-8">Article</th>
+                  <th className="px-8 py-8">Catégorie</th>
+                  <th className="px-8 py-8 text-center">Quantité</th>
+                  <th className="px-10 py-8 text-right">Prix (Fc)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {previewItems.map((item, idx) => (
+                  <tr key={idx}>
+                    <td className="px-10 py-8 text-sm font-black italic uppercase text-slate-900">{item.name}</td>
+                    <td className="px-8 py-8"><Badge status="OPTIMAL" /></td>
+                    <td className="px-8 py-8 text-center text-lg font-black italic tabular-nums text-slate-900">{item.currentStock}</td>
+                    <td className="px-10 py-8 text-right font-black italic text-slate-900">{item.unitPrice?.toLocaleString()} Fc</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- App Entry Point ---
 
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeView, setActiveView] = useState<ViewType>('dashboard');
-  
   const [products, setProducts] = useState<Product[]>(() => getStored('ss_products', INITIAL_PRODUCTS));
   const [furniture, setFurniture] = useState<Furniture[]>(() => getStored('ss_furniture', INITIAL_FURNITURE));
   const [history, setHistory] = useState<InventoryLog[]>(() => getStored('ss_history', []));
-  const [sites] = useState<Site[]>([
-    { id: 'S1', name: 'ENTREPÔT CENTRAL (KINSHASA)', location: 'Limete', capacity: 15000, status: 'Opérationnel', manager: 'Admin Pro' },
-    { id: 'S2', name: 'SIÈGE SOCIAL (GOMBE)', location: 'Gombe', capacity: 5000, status: 'Opérationnel', manager: 'Admin Pro' }
-  ]);
-
+  const [exchangeRate, setExchangeRate] = useState<number>(() => getStored('ss_exchange_rate', 2850));
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('Toutes');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
-  const [aiReport, setAiReport] = useState<RapportAutomatique | null>(null);
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-  const [importData, setImportData] = useState<Partial<Product>[]>([]);
-  const [isReviewOpen, setIsReviewOpen] = useState(false);
-  const [hasApiKey, setHasApiKey] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // État pour la confirmation d'action
-  const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    type: 'danger' | 'info' | 'success';
-    onConfirm: () => void;
-  }>({ isOpen: false, title: '', message: '', type: 'info', onConfirm: () => {} });
-
-  // États pour la modification de produit
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-  const loadingMessages = [
-    "Initialisation du moteur Vision Pro...",
-    "Analyse de la structure sémantique du document...",
-    "Classification intelligente par type d'article...",
-    "Certification des flux par SmartStock AI...",
-    "Préparation du registre de vérification..."
-  ];
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingFurniture, setEditingFurniture] = useState<Furniture | null>(null);
+  
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
   useEffect(() => {
     localStorage.setItem('ss_products', JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
     localStorage.setItem('ss_furniture', JSON.stringify(furniture));
-  }, [furniture]);
-
-  useEffect(() => {
     localStorage.setItem('ss_history', JSON.stringify(history));
-  }, [history]);
-
-  useEffect(() => {
-    let interval: any;
-    if (isAiLoading) {
-      interval = setInterval(() => {
-        setLoadingStep(prev => (prev + 1) % loadingMessages.length);
-      }, 2500);
-    } else {
-      setLoadingStep(0);
-    }
-    return () => clearInterval(interval);
-  }, [isAiLoading]);
-
-  useEffect(() => {
-    const checkKey = async () => {
-      if (window.aistudio && await window.aistudio.hasSelectedApiKey()) setHasApiKey(true);
-    };
-    checkKey();
-  }, []);
+    localStorage.setItem('ss_exchange_rate', JSON.stringify(exchangeRate));
+  }, [products, furniture, history, exchangeRate]);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const addHistoryLog = (type: InventoryLog['type'], productId: string, productName: string, change: number, final: number, reason?: string) => {
-    const newLog: InventoryLog = {
-      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  const handleImportSuccess = (newProducts: Product[]) => {
+    setProducts(prev => [...prev, ...newProducts]);
+    const newLogs: InventoryLog[] = newProducts.map(p => ({
+      id: `log-${Date.now()}-${p.id}`,
       date: new Date().toISOString(),
-      type,
-      productId,
-      productName,
-      changeAmount: change,
-      finalStock: final,
-      reason,
-      responsible: 'Admin Pro'
-    };
-    setHistory(prev => [...prev, newLog]);
-  };
-
-  const handleDeleteProduct = (id: string) => {
-    const productToDelete = products.find(p => p.id === id);
-    if (!productToDelete) return;
-
-    setConfirmModal({
-      isOpen: true,
-      title: "Suppression du registre",
-      message: `Voulez-vous vraiment retirer l'article "${productToDelete.name}" de l'inventaire SmartStock ? Cette action est irréversible.`,
-      type: 'danger',
-      onConfirm: () => {
-        setProducts(prev => prev.filter(p => p.id !== id));
-        addHistoryLog('adjustment', id, productToDelete.name, -productToDelete.currentStock, 0, "Suppression définitive du registre");
-        showToast("Article supprimé du registre");
-        setConfirmModal(prev => ({ ...prev, isOpen: false }));
-      }
-    });
-  };
-
-  const handleOpenEditModal = (product: Product | null) => {
-    if (product) {
-      setEditingProduct({ ...product });
-    } else {
-      setEditingProduct({
-        id: `prod-${Date.now()}`,
-        name: '',
-        category: INITIAL_CATEGORIES[0],
-        currentStock: 0,
-        minStock: 10,
-        monthlyNeed: 0,
-        unit: 'unités',
-        unitPrice: 0,
-        currency: 'Fc',
-        siteId: 'S1',
-        lastInventoryDate: new Date().toISOString()
-      });
-    }
-    setIsEditModalOpen(true);
+      type: 'entry',
+      productId: p.id,
+      productName: p.name,
+      changeAmount: p.currentStock,
+      finalStock: p.currentStock,
+      reason: "Import Automatisé",
+      responsible: "Admin Pro"
+    }));
+    setHistory(prev => [...prev, ...newLogs]);
+    setActiveView('inventory');
   };
 
   const handleSaveProduct = () => {
     if (!editingProduct) return;
-    if (!editingProduct.name.trim()) {
-      showToast("Le nom de l'article est obligatoire", "error");
-      return;
-    }
-
-    const saveAction = () => {
-      setProducts(prev => {
-        const exists = prev.find(p => p.id === editingProduct.id);
-        if (exists) {
-          const change = editingProduct.currentStock - exists.currentStock;
-          if (change !== 0) {
-            addHistoryLog('adjustment', editingProduct.id, editingProduct.name, change, editingProduct.currentStock, "Mise à jour manuelle des stocks");
-          }
-          return prev.map(p => p.id === editingProduct.id ? editingProduct : p);
-        } else {
-          addHistoryLog('entry', editingProduct.id, editingProduct.name, editingProduct.currentStock, editingProduct.currentStock, "Création manuelle d'article");
-          return [...prev, editingProduct];
-        }
-      });
-      setIsEditModalOpen(false);
-      setEditingProduct(null);
-      showToast("Registre SmartStock mis à jour");
-    };
-
-    const exists = products.find(p => p.id === editingProduct.id);
-    if (exists) {
-      setConfirmModal({
-        isOpen: true,
-        title: "Confirmer les modifications",
-        message: `Souhaitez-vous enregistrer les changements apportés à l'article "${editingProduct.name}" ?`,
-        type: 'info',
-        onConfirm: () => {
-          saveAction();
-          setConfirmModal(prev => ({ ...prev, isOpen: false }));
-        }
-      });
+    const index = products.findIndex(p => p.id === editingProduct.id);
+    if (index >= 0) {
+      const updated = [...products];
+      updated[index] = editingProduct;
+      setProducts(updated);
+      showToast("Données mises à jour");
     } else {
-      saveAction();
+      const newId = `p-${Date.now()}`;
+      setProducts(prev => [...prev, { ...editingProduct, id: newId }]);
+      showToast("Article enregistré");
     }
+    setIsEditModalOpen(false);
+    setEditingProduct(null);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsAiLoading(true);
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const base64 = event.target?.result as string;
-      const base64Data = base64.split(',')[1];
-      try {
-        const data = await extractDataFromFile(base64Data, file.type);
-        setImportData(data);
-        setIsReviewOpen(true);
-      } catch (error) {
-        showToast("Échec de l'analyse intelligente", "error");
-      } finally {
-        setIsAiLoading(false);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleManualCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      const lines = content.split(/\r?\n/);
-      
-      const parsedData: Partial<Product>[] = lines.slice(1).filter(line => line.trim()).map(line => {
-        const values = line.split(/[;,]/);
-        return {
-          name: values[0]?.trim() || "Article sans nom",
-          category: values[1]?.trim() || "Autre",
-          currentStock: parseInt(values[2]) || 0,
-          unitPrice: parseInt(values[3]) || 0,
-          unit: values[4]?.trim() || "unités"
-        };
-      });
-
-      if (parsedData.length > 0) {
-        setConfirmModal({
-          isOpen: true,
-          title: "Importation CSV détectée",
-          message: `Voulez-vous importer manuellement ${parsedData.length} articles dans le registre ? (Format attendu: Nom, Catégorie, Stock, Prix, Unité)`,
-          type: 'info',
-          onConfirm: () => {
-            const newProducts: Product[] = parsedData.map((item, idx) => ({
-              id: `csv-${Date.now()}-${idx}`,
-              name: item.name!,
-              category: INITIAL_CATEGORIES.includes(item.category!) ? item.category! : "Autre",
-              currentStock: item.currentStock || 0,
-              minStock: 10,
-              monthlyNeed: 0,
-              unit: item.unit || "unités",
-              unitPrice: item.unitPrice || 0,
-              currency: 'Fc',
-              siteId: 'S1',
-              lastInventoryDate: new Date().toISOString()
-            }));
-
-            setProducts(prev => [...prev, ...newProducts]);
-            newProducts.forEach(p => {
-              addHistoryLog('entry', p.id, p.name, p.currentStock, p.currentStock, "Import manuel via fichier CSV");
-            });
-            showToast(`${newProducts.length} articles importés avec succès`);
-            setConfirmModal(prev => ({ ...prev, isOpen: false }));
-          }
-        });
-      } else {
-        showToast("Le fichier CSV semble vide ou mal formé", "error");
-      }
-    };
-    reader.readAsText(file);
-    if (e.target) e.target.value = '';
-  };
-
-  // NEW: Filtered Export with Green Formatting (Excel compatible HTML)
-  const handleFilteredExport = () => {
-    const filtered = products.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            p.category.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = selectedCategory === 'Toutes' || p.category === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
-
-    if (filtered.length === 0) {
-      showToast("Aucune donnée correspondant aux filtres", "error");
-      return;
+  const handleSaveFurniture = () => {
+    if (!editingFurniture) return;
+    const index = furniture.findIndex(f => f.id === editingFurniture.id);
+    if (index >= 0) {
+      const updated = [...furniture];
+      updated[index] = editingFurniture;
+      setFurniture(updated);
+      showToast("Actif mis à jour");
+    } else {
+      setFurniture(prev => [...prev, editingFurniture]);
+      showToast("Actif enregistré");
     }
+    setIsEditModalOpen(false);
+    setEditingFurniture(null);
+  };
 
-    const title = `Inventaire SmartStock - ${selectedCategory} - ${new Date().toLocaleDateString()}`;
-    const headerColor = "#143d21";
-    const subColor = "#f0fdf4";
-    const textColor = "#ffffff";
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+  };
 
-    let html = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          table { border-collapse: collapse; width: 100%; font-family: 'Segoe UI', sans-serif; }
-          th { background-color: ${headerColor}; color: ${textColor}; padding: 12px; border: 1px solid #ddd; text-align: left; text-transform: uppercase; font-size: 10px; }
-          td { padding: 10px; border: 1px solid #ddd; font-size: 11px; }
-          .row-even { background-color: ${subColor}; }
-          .title { font-size: 20px; font-weight: bold; color: ${headerColor}; margin-bottom: 20px; text-align: center; }
-          .footer { font-size: 9px; color: #999; margin-top: 20px; text-align: right; }
-          .alert { color: #e11d48; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <div class="title">${title}</div>
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Désignation</th>
-              <th>Catégorie</th>
-              <th>Stock</th>
-              <th>Seuil</th>
-              <th>Prix Unitaire</th>
-              <th>Valeur Totale</th>
-              <th>Unité</th>
-              <th>Site</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-    `;
-
-    filtered.forEach((p, index) => {
-      const isLow = p.currentStock <= p.minStock;
-      const totalVal = p.currentStock * p.unitPrice;
-      html += `
-        <tr class="${index % 2 === 0 ? '' : 'row-even'}">
-          <td>SKU-${p.id.slice(-4)}</td>
-          <td><b>${p.name.toUpperCase()}</b></td>
-          <td>${p.category}</td>
-          <td style="text-align: center; font-weight: bold;">${p.currentStock}</td>
-          <td style="text-align: center;">${p.minStock}</td>
-          <td>${p.unitPrice.toLocaleString()} ${p.currency}</td>
-          <td><b>${totalVal.toLocaleString()} ${p.currency}</b></td>
-          <td>${p.unit}</td>
-          <td>${p.siteId}</td>
-          <td class="${isLow ? 'alert' : ''}">${isLow ? 'RÉAPPRO' : 'OPTIMAL'}</td>
-        </tr>
-      `;
-    });
-
-    html += `
-          </tbody>
-        </table>
-        <div class="footer">Généré par SmartStock Pro Automatic System - DRC HQ - ${new Date().toLocaleString()}</div>
-      </body>
-      </html>
-    `;
-
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+  const handleExportCSV = () => {
+    const headers = "ID,Nom,Categorie,Stock,Prix Unit.,Devise,Valo Totale (Fc)\n";
+    const rows = products.map(p => {
+      const priceInFc = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
+      return `${p.id},"${p.name}",${p.category},${p.currentStock},${p.unitPrice},${p.currency},${p.currentStock * priceInFc}`;
+    }).join("\n");
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `SmartStock_Export_Vert_${new Date().toISOString().split('T')[0]}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Export filtré (Tableau Vert) généré");
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventaire_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    showToast("Export CSV généré");
   };
 
-  const handleManualCsvExport = () => {
-    if (products.length === 0) {
-      showToast("Aucune donnée à exporter", "error");
-      return;
-    }
-
-    const headers = ["Désignation", "Catégorie", "Stock Actuel", "Prix Unitaire", "Unité", "Site", "Dernier Inventaire"];
-    const rows = products.map(p => [
-      p.name,
-      p.category,
-      p.currentStock.toString(),
-      p.unitPrice.toString(),
-      p.unit,
-      p.siteId,
-      new Date(p.lastInventoryDate).toLocaleDateString()
-    ]);
-
-    const csvContent = [
-      headers.join(";"),
-      ...rows.map(row => row.join(";"))
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const handleExportAuditCSV = () => {
+    const headers = "Date,Heure,Article,Mouvement,Final,Responsable,Motif\n";
+    const rows = history.map(h => {
+      const d = new Date(h.date);
+      return `"${d.toLocaleDateString()}","${d.toLocaleTimeString()}","${h.productName}",${h.changeAmount},${h.finalStock},"${h.responsible || 'Admin'}","${h.reason || 'Std'}"`;
+    }).join("\n");
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `SmartStock_Inventaire_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Registre exporté au format CSV");
-  };
-
-  const handleAiReport = async () => {
-    setIsAiLoading(true);
-    try {
-      const report = await getProfessionalReport(products, history);
-      setAiReport(report);
-      showToast("Audit certifié généré");
-    } catch (error) {
-      showToast("Erreur d'audit", "error");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  const confirmImport = () => {
-    const newProducts: Product[] = importData.map((item, idx) => ({
-      id: `imported-${Date.now()}-${idx}`,
-      name: item.name || 'Produit Inconnu',
-      category: item.category || 'Autre',
-      currentStock: item.currentStock || 0,
-      minStock: 10,
-      monthlyNeed: 0,
-      unit: item.unit || 'unités',
-      unitPrice: item.unitPrice || 0,
-      currency: 'Fc',
-      siteId: 'S1',
-      lastInventoryDate: new Date().toISOString(),
-    }));
-
-    setProducts(prev => [...prev, ...newProducts]);
-    newProducts.forEach(p => {
-      addHistoryLog('entry', p.id, p.name, p.currentStock, p.currentStock, "Import automatique via Vision AI");
-    });
-    
-    setIsReviewOpen(false);
-    setImportData([]);
-    showToast(`${newProducts.length} articles classés et sauvegardés`);
-  };
-
-  const ConfirmationModal = () => {
-    if (!confirmModal.isOpen) return null;
-
-    const colors = {
-      danger: {
-        bg: 'bg-rose-50',
-        text: 'text-rose-600',
-        border: 'border-rose-100',
-        btn: 'bg-rose-600 hover:bg-rose-700',
-        icon: <AlertTriangle className="w-8 h-8" />
-      },
-      info: {
-        bg: 'bg-blue-50',
-        text: 'text-blue-600',
-        border: 'border-blue-100',
-        btn: 'bg-[#143d21] hover:bg-black',
-        icon: <Info className="w-8 h-8" />
-      },
-      success: {
-        bg: 'bg-emerald-50',
-        text: 'text-emerald-600',
-        border: 'border-emerald-100',
-        btn: 'bg-emerald-600 hover:bg-emerald-700',
-        icon: <ShieldCheck className="w-8 h-8" />
-      }
-    }[confirmModal.type];
-
-    return (
-      <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl border flex flex-col items-center text-center space-y-6 animate-modal">
-          <div className={`p-6 rounded-3xl ${colors.bg} ${colors.text} ${colors.border} border-2`}>
-            {colors.icon}
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-xl font-black italic uppercase tracking-tighter text-slate-900">{confirmModal.title}</h3>
-            <p className="text-xs font-medium text-slate-500 leading-relaxed px-4">{confirmModal.message}</p>
-          </div>
-          <div className="flex gap-4 w-full">
-            <button 
-              onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} 
-              className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all"
-            >
-              Annuler
-            </button>
-            <button 
-              onClick={confirmModal.onConfirm} 
-              className={`flex-1 py-4 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg transition-all ${colors.btn}`}
-            >
-              Confirmer
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const ExtractionLoader = () => (
-    <div className="fixed inset-0 z-[400] bg-slate-900/40 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-500">
-      <div className="bg-white w-full max-xl rounded-[4rem] p-16 shadow-2xl text-center space-y-12 border animate-in zoom-in-95 duration-500">
-        <div className="relative w-32 h-32 mx-auto">
-          <div className="absolute inset-0 bg-emerald-100 rounded-[2.5rem] animate-pulse" />
-          <div className="absolute inset-4 bg-white rounded-[2rem] flex items-center justify-center shadow-inner">
-            <ScanFace className="w-12 h-12 text-[#143d21] animate-bounce" />
-          </div>
-          <div className="absolute -top-4 -right-4 w-12 h-12 bg-[#143d21] rounded-2xl flex items-center justify-center text-white shadow-xl animate-spin-slow">
-            <DatabaseZap className="w-6 h-6" />
-          </div>
-        </div>
-        <div className="space-y-4">
-          <h3 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Extraction Automatique Pro</h3>
-          <div className="h-6 overflow-hidden">
-            <p className="text-[11px] font-black text-emerald-600 uppercase tracking-[0.2em] animate-in slide-in-from-bottom-2">
-              {loadingMessages[loadingStep]}
-            </p>
-          </div>
-        </div>
-        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-[#143d21] to-emerald-500 transition-all duration-700 ease-out" style={{ width: `${((loadingStep + 1) / loadingMessages.length) * 100}%` }} />
-        </div>
-        <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest italic leading-relaxed">Traitement temps réel via SmartStock Vision Engine v4.0</p>
-      </div>
-    </div>
-  );
-
-  const DashboardView = () => {
-    const totalValue = products.reduce((a,b)=>a+(b.currentStock*b.unitPrice), 0);
-    return (
-      <div className="space-y-8 animate-in fade-in duration-500">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard label="VALEUR CONSOMMABLES" value={`${totalValue.toLocaleString()} Fc`} icon={DollarSign} trend="RÉEL" />
-          <StatCard label="PATRIMOINE IMMOBILISÉ" value="0 Fc" icon={Building2} trend="VIDE" />
-          <StatCard label="RUPTURES DE STOCK" value={products.filter(p=>p.currentStock<=p.minStock).length} icon={ShieldAlert} alert={products.filter(p=>p.currentStock<=p.minStock).length > 0} />
-          <StatCard label="ACTIFS GÉRÉS" value={furniture.length + products.length} icon={Armchair} trend={`${products.length}`} />
-        </div>
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-          <div className="xl:col-span-2 bg-white p-8 border rounded-[2rem] shadow-sm">
-            <div className="flex justify-between items-center mb-10">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Activity className="w-4 h-4 text-[#143d21]" /> Journal de traçabilité récent</h3>
-              <button onClick={() => setActiveView('history')} className="text-[9px] font-black uppercase text-[#143d21] border-b border-[#143d21]/20">Registre Complet</button>
-            </div>
-            {history.length > 0 ? (
-              <div className="space-y-4">
-                {history.slice(-5).reverse().map(log => (
-                  <div key={log.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-2 rounded-lg ${log.type === 'entry' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                        {log.type === 'entry' ? <ChevronUp className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
-                      </div>
-                      <div>
-                        <p className="text-xs font-black uppercase text-slate-900">{log.productName}</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{new Date(log.date).toLocaleTimeString()}</p>
-                      </div>
-                    </div>
-                    <p className={`text-sm font-black italic ${log.changeAmount >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {log.changeAmount >= 0 ? `+${log.changeAmount}` : log.changeAmount}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="h-[300px] w-full flex items-center justify-center border-2 border-dashed border-slate-50 rounded-3xl">
-                <p className="text-[10px] font-black uppercase text-slate-300 tracking-[0.3em]">En attente de flux logistiques...</p>
-              </div>
-            )}
-          </div>
-          <div className="space-y-6">
-            <div className="bg-white p-6 border rounded-[2rem] shadow-sm space-y-4">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Flux de travail rapide</h4>
-              <WorkflowAction icon={FileText} label="Lancer l'audit automatique" onClick={() => setActiveView('monthly_report')} />
-              <WorkflowAction icon={Camera} label="Extraction Vision" onClick={() => setActiveView('import')} />
-              <WorkflowAction icon={Armchair} label="Recensement Mobilier" onClick={() => setActiveView('furniture')} />
-              <WorkflowAction icon={ImageIcon} label="Visualisation Studio" onClick={() => setActiveView('studio')} />
-            </div>
-            <div className="bg-[#143d21] p-8 rounded-[2rem] text-white space-y-4 shadow-xl relative overflow-hidden">
-              <ShieldCheck className="w-8 h-8 text-emerald-400" />
-              <h4 className="text-sm font-black uppercase italic tracking-tighter">Système prêt à l'emploi</h4>
-              <p className="text-[9px] font-medium text-emerald-100/40 uppercase tracking-widest leading-relaxed">Vos données sont sauvegardées localement dans votre navigateur.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const InventoryView = () => {
-    const filteredProducts = useMemo(() => {
-      return products.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              p.category.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCategory = selectedCategory === 'Toutes' || p.category === selectedCategory;
-        return matchesSearch && matchesCategory;
-      });
-    }, [products, searchTerm, selectedCategory]);
-
-    const stats = {
-      totalItems: products.length,
-      lowStock: products.filter(p => p.currentStock <= p.minStock).length,
-      outOfStock: products.filter(p => p.currentStock === 0).length,
-      totalValue: products.reduce((acc, p) => acc + (p.currentStock * p.unitPrice), 0)
-    };
-
-    const categories = ['Toutes', ...INITIAL_CATEGORIES];
-
-    return (
-      <div className="space-y-8 animate-in fade-in duration-500">
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          className="hidden" 
-          accept=".csv,.txt"
-          onChange={handleManualCsvImport} 
-        />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white p-6 border rounded-[2rem] shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-slate-50 text-slate-400 rounded-2xl"><Layers className="w-5 h-5" /></div>
-            <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Articles</p>
-              <p className="text-xl font-black italic text-slate-900 leading-none mt-1">{stats.totalItems}</p>
-            </div>
-          </div>
-          <div className="bg-white p-6 border rounded-[2rem] shadow-sm flex items-center gap-4 border-rose-100">
-            <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl"><TrendingDown className="w-5 h-5" /></div>
-            <div>
-              <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest">Alerte Stock</p>
-              <p className="text-xl font-black italic text-rose-600 leading-none mt-1">{stats.lowStock}</p>
-            </div>
-          </div>
-          <div className="bg-white p-6 border rounded-[2rem] shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl"><DollarSign className="w-5 h-5" /></div>
-            <div>
-              <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Valeur Stockée</p>
-              <p className="text-xl font-black italic text-emerald-700 leading-none mt-1">{stats.totalValue.toLocaleString()} Fc</p>
-            </div>
-          </div>
-          <div className="bg-white p-6 border rounded-[2rem] shadow-sm flex items-center gap-4 border-amber-100">
-            <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl"><ShieldAlert className="w-5 h-5" /></div>
-            <div>
-              <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Rupture (0)</p>
-              <p className="text-xl font-black italic text-amber-600 leading-none mt-1">{stats.outOfStock}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 border rounded-3xl shadow-sm flex flex-col lg:flex-row gap-6 items-center">
-          <div className="flex-1 relative w-full">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4" />
-            <input 
-              type="text" 
-              placeholder="Rechercher par désignation, référence ou site..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-14 pr-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium text-xs text-slate-900 focus:bg-white transition-all border-2 border-transparent focus:border-emerald-500/10"
-            />
-          </div>
-          <div className="flex gap-3 w-full lg:w-auto">
-            <div className="relative flex-1 lg:flex-none">
-              <Filter className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 w-3 h-3" />
-              <select 
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="pl-12 pr-10 py-4 bg-slate-50 border-none rounded-2xl outline-none font-black uppercase text-[9px] tracking-widest text-slate-900 appearance-none cursor-pointer"
-              >
-                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 w-3 h-3 pointer-events-none" />
-            </div>
-            
-            <button 
-              onClick={() => fileInputRef.current?.click()} 
-              className="px-5 py-4 bg-white border-2 border-slate-50 text-slate-600 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm"
-              title="Importer un fichier CSV"
-            >
-              <FileUp className="w-4 h-4 text-blue-500" /> Import
-            </button>
-            
-            <button 
-              onClick={handleFilteredExport}
-              className="px-5 py-4 bg-[#f0fdf4] border-2 border-emerald-100 text-emerald-700 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 hover:bg-emerald-100 transition-all shadow-sm"
-              title="Exporter le registre filtré avec mise en forme verte"
-            >
-              <ExcelIcon className="w-4 h-4 text-emerald-600" /> Export Vert
-            </button>
-
-            <button onClick={() => handleOpenEditModal(null)} className="px-8 py-4 bg-[#143d21] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-lg hover:bg-black transition-all">
-              <Plus className="w-4 h-4" /> Ajouter
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white border rounded-[2.5rem] overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                <tr>
-                  <th className="px-10 py-6">Référence & Désignation</th>
-                  <th className="px-10 py-6">Catégorie / Site</th>
-                  <th className="px-10 py-6 text-center">Niveau / Seuil</th>
-                  <th className="px-10 py-6 text-center">Disponibilité</th>
-                  <th className="px-10 py-6 text-right">Valorisation</th>
-                  <th className="px-10 py-6 text-right">Dernière Audit</th>
-                  <th className="px-10 py-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filteredProducts.map(p => {
-                  const isLowStock = p.currentStock <= p.minStock;
-                  const isCritical = p.currentStock <= p.minStock / 2;
-                  const percentage = Math.min(100, (p.currentStock / (p.minStock * 2)) * 100);
-                  
-                  return (
-                    <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
-                      <td className="px-10 py-6">
-                        <p className="text-[8px] font-mono font-black text-slate-300 mb-0.5 uppercase tracking-tighter">SKU-{p.id.padStart(4, '0')}</p>
-                        <p className="font-black text-slate-900 uppercase italic text-sm group-hover:text-[#143d21] transition-colors">{p.name}</p>
-                      </td>
-                      <td className="px-10 py-6">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[9px] font-black text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded-md w-max">{p.category}</span>
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.1em]">{p.siteId === 'S1' ? 'Entrepôt Central' : 'Succursale'}</span>
-                        </div>
-                      </td>
-                      <td className="px-10 py-6">
-                        <div className="flex flex-col items-center gap-1.5">
-                          <div className="flex items-center gap-3">
-                            <span className={`text-xl font-black italic ${isLowStock ? 'text-rose-500' : 'text-slate-900'}`}>{p.currentStock}</span>
-                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">/ {p.minStock}</span>
-                          </div>
-                          <div className="w-24 h-1 bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full transition-all duration-500 ${isCritical ? 'bg-rose-500' : isLowStock ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-10 py-6 text-center">
-                        {isLowStock ? (
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[8px] font-black uppercase italic ${isCritical ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'}`}>
-                            <TrendingDown className="w-3 h-3" /> {isCritical ? 'Critique' : 'Réappro'}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase italic">
-                            <ShieldCheck className="w-3 h-3" /> Optimal
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-10 py-6 text-right">
-                        <p className="font-black text-slate-900 italic text-sm">{(p.currentStock * p.unitPrice).toLocaleString()} {p.currency}</p>
-                        <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest">{p.unitPrice.toLocaleString()} / {p.unit}</p>
-                      </td>
-                      <td className="px-10 py-6 text-right">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{new Date(p.lastInventoryDate).toLocaleDateString()}</p>
-                        <p className="text-[8px] font-black text-slate-300 uppercase italic">Par: Admin_Pro</p>
-                      </td>
-                      <td className="px-10 py-6 text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => {
-                            const newStock = p.currentStock + 1;
-                            const updated = { ...p, currentStock: newStock, lastInventoryDate: new Date().toISOString() };
-                            setProducts(prev => prev.map(item => item.id === p.id ? updated : item));
-                            addHistoryLog('entry', p.id, p.name, 1, newStock, "Ajout rapide (+1)");
-                            showToast("+1 unité ajoutée");
-                          }} className="p-2.5 bg-slate-50 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"><PlusCircle className="w-4 h-4" /></button>
-                          <button onClick={() => handleOpenEditModal(p)} className="p-2.5 bg-slate-50 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => handleDeleteProduct(p.id)} className="p-2.5 bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {filteredProducts.length === 0 && (
-            <div className="p-20 text-center space-y-4">
-              <SearchCode className="w-12 h-12 text-slate-100 mx-auto" />
-              <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em] italic">Aucun article enregistré dans le système SmartStock.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const EditModal = () => {
-    if (!editingProduct) return null;
-    return (
-      <div className="fixed inset-0 z-[500] flex items-center justify-center p-8 bg-slate-900/80 backdrop-blur-md animate-in fade-in">
-        <div className="bg-white w-full max-w-2xl rounded-[4rem] p-12 shadow-2xl flex flex-col animate-modal">
-          <div className="flex justify-between items-center mb-10">
-            <div>
-              <h3 className="text-3xl font-black italic uppercase tracking-tighter leading-none">Gestion de l'article</h3>
-              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-1">Sauvegarde immédiate dans le registre</p>
-            </div>
-            <button onClick={() => setIsEditModalOpen(false)} className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:bg-rose-50 hover:text-rose-500 transition-all"><X className="w-6 h-6" /></button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10 overflow-y-auto max-h-[60vh] pr-2">
-            <div className="space-y-3">
-              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">DÉSIGNATION ARTICLE</label>
-              <input 
-                type="text" 
-                value={editingProduct.name} 
-                onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-black italic text-sm text-slate-900 focus:bg-white focus:ring-1 focus:ring-emerald-500/10 transition-all" 
-              />
-            </div>
-            <div className="space-y-3">
-              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">CATÉGORIE ERP</label>
-              <select 
-                value={editingProduct.category} 
-                onChange={e => setEditingProduct({ ...editingProduct, category: e.target.value })}
-                className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-black italic text-sm text-slate-900 focus:bg-white focus:ring-1 focus:ring-emerald-500/10 transition-all appearance-none"
-              >
-                {INITIAL_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-            </div>
-            <div className="space-y-3">
-              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">STOCK ACTUEL ({editingProduct.unit})</label>
-              <input 
-                type="number" 
-                value={editingProduct.currentStock} 
-                onChange={e => setEditingProduct({ ...editingProduct, currentStock: parseInt(e.target.value) || 0 })}
-                className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-black italic text-sm text-slate-900 focus:bg-white focus:ring-1 focus:ring-emerald-500/10 transition-all" 
-              />
-            </div>
-            <div className="space-y-3">
-              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">SEUIL D'ALERTE (MIN)</label>
-              <input 
-                type="number" 
-                value={editingProduct.minStock} 
-                onChange={e => setEditingProduct({ ...editingProduct, minStock: parseInt(e.target.value) || 0 })}
-                className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-black italic text-sm text-slate-900 focus:bg-white focus:ring-1 focus:ring-emerald-500/10 transition-all" 
-              />
-            </div>
-            <div className="space-y-3">
-              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">PRIX UNITAIRE ({editingProduct.currency})</label>
-              <input 
-                type="number" 
-                value={editingProduct.unitPrice} 
-                onChange={e => setEditingProduct({ ...editingProduct, unitPrice: parseInt(e.target.value) || 0 })}
-                className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-black italic text-sm text-slate-900 focus:bg-white focus:ring-1 focus:ring-emerald-500/10 transition-all" 
-              />
-            </div>
-            <div className="space-y-3">
-              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">UNITÉ DE MESURE</label>
-              <input 
-                type="text" 
-                value={editingProduct.unit} 
-                onChange={e => setEditingProduct({ ...editingProduct, unit: e.target.value })}
-                className="w-full p-5 bg-slate-50 rounded-2xl outline-none font-black italic text-sm text-slate-900 focus:bg-white focus:ring-1 focus:ring-emerald-500/10 transition-all" 
-              />
-            </div>
-          </div>
-          <button onClick={handleSaveProduct} className="w-full py-6 bg-[#143d21] text-white rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-black transition-all flex items-center justify-center gap-3">
-            <Check className="w-5 h-5" /> Confirmer & Sauvegarder
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  const FurnitureView = () => (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="bg-white p-6 border rounded-3xl shadow-sm flex flex-col lg:flex-row gap-6 items-center">
-        <div className="flex-1 relative w-full">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4" />
-          <input 
-            type="text" 
-            placeholder="Code inventaire, nom ou département d'affectation..." 
-            className="w-full pl-14 pr-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium text-xs text-slate-900 focus:bg-white transition-all border-2 border-transparent focus:border-emerald-500/10"
-          />
-        </div>
-        <button className="px-8 py-4 bg-black text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-lg hover:bg-emerald-900 transition-all">
-          <Plus className="w-4 h-4" /> Nouvel Actif
-        </button>
-      </div>
-      <div className="bg-white border rounded-[2.5rem] overflow-hidden shadow-sm">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            <tr>
-              <th className="px-10 py-6">Code & Désignation</th>
-              <th className="px-10 py-6">Affectation & Site</th>
-              <th className="px-10 py-6 text-center">État / Condition</th>
-              <th className="px-10 py-6 text-center">Quantité</th>
-              <th className="px-10 py-6 text-right">Valeur Acquisition</th>
-              <th className="px-10 py-6 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {furniture.map(f => (
-              <tr key={f.id} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="px-10 py-6">
-                  <p className="text-[9px] font-mono font-black text-emerald-600 tracking-tighter mb-1">{f.code}</p>
-                  <p className="font-black text-slate-900 uppercase italic text-sm">{f.name}</p>
-                </td>
-                <td className="px-10 py-6">
-                  <div className="flex items-center gap-2 mb-1">
-                    <MapPin className="w-3 h-3 text-emerald-600" />
-                    <p className="text-[10px] font-black text-slate-800 uppercase italic">Site: {f.siteId}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <User className="w-3 h-3 text-slate-400" />
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{f.assignedTo || 'Non affecté'}</p>
-                  </div>
-                </td>
-                <td className="px-10 py-6 text-center">
-                  <span className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase ${f.condition === 'Neuf' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{f.condition}</span>
-                </td>
-                <td className="px-10 py-6 text-center font-black text-slate-900 italic text-xl">
-                  {f.currentCount}
-                </td>
-                <td className="px-10 py-6 text-right font-black text-slate-900 text-lg">{(f.purchasePrice || 0).toLocaleString()} Fc</td>
-                <td className="px-10 py-6 text-right">
-                  <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="p-2 text-slate-400 hover:text-[#143d21] transition-colors"><Edit2 className="w-4 h-4" /></button>
-                    <button className="p-2 text-slate-400 hover:text-rose-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {furniture.length === 0 && (
-            <div className="p-20 text-center space-y-4">
-              <Armchair className="w-12 h-12 text-slate-100 mx-auto" />
-              <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em] italic">Aucun actif mobilier répertorié.</p>
-            </div>
-          )}
-      </div>
-    </div>
-  );
-
-  const HistoryView = () => (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="bg-white p-6 border rounded-3xl shadow-sm flex flex-col lg:flex-row gap-6 items-center">
-        <div className="flex-1 relative w-full">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4" />
-          <input 
-            type="text" 
-            placeholder="Rechercher dans l'historique des flux..." 
-            className="w-full pl-14 pr-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium text-xs text-slate-900 focus:bg-white transition-all border-2 border-transparent focus:border-emerald-500/10"
-          />
-        </div>
-        <div className="flex gap-3">
-          <button className="px-6 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black uppercase text-[9px] tracking-widest border hover:bg-white transition-all">Exporter PDF</button>
-          <button 
-            onClick={() => {
-              setConfirmModal({
-                isOpen: true,
-                title: "Réinitialisation des logs",
-                message: "Voulez-vous vider l'intégralité de l'historique des flux ? Cette opération est définitive.",
-                type: 'danger',
-                onConfirm: () => {
-                  setHistory([]);
-                  showToast("Historique réinitialisé");
-                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                }
-              });
-            }} 
-            className="px-6 py-4 bg-slate-50 text-rose-500 rounded-2xl font-black uppercase text-[9px] tracking-widest border hover:bg-rose-50 transition-all"
-          >
-            Vider les logs
-          </button>
-        </div>
-      </div>
-      <div className="bg-white border rounded-[2.5rem] overflow-hidden shadow-sm">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            <tr>
-              <th className="px-10 py-6">Date & ID</th>
-              <th className="px-10 py-6">Opération / Article</th>
-              <th className="px-10 py-6 text-center">Type de flux</th>
-              <th className="px-10 py-6 text-center">Variation</th>
-              <th className="px-10 py-6 text-right">Stock Final</th>
-              <th className="px-10 py-6 text-right">Opérateur</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {history.length > 0 ? [...history].reverse().map(log => (
-              <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-10 py-6">
-                  <p className="text-[8px] font-mono font-black text-emerald-600/40 mb-1">LOG-{log.id.slice(0,8)}</p>
-                  <p className="text-[10px] font-black text-slate-400 uppercase">{new Date(log.date).toLocaleString()}</p>
-                </td>
-                <td className="px-10 py-6">
-                  <p className="font-black text-slate-900 uppercase italic text-sm">{log.productName}</p>
-                  <p className="text-[9px] font-black text-slate-400 uppercase italic tracking-widest">{log.reason || 'Opération standard'}</p>
-                </td>
-                <td className="px-10 py-6 text-center">
-                  <span className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase italic ${
-                    log.type === 'entry' ? 'bg-emerald-50 text-emerald-600' : 
-                    log.type === 'exit' ? 'bg-rose-50 text-rose-600' : 
-                    log.type === 'transfer' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    {log.type}
-                  </span>
-                </td>
-                <td className="px-10 py-6 text-center">
-                  <span className={`font-black italic text-sm ${log.changeAmount >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {log.changeAmount >= 0 ? `+${log.changeAmount}` : log.changeAmount}
-                  </span>
-                </td>
-                <td className="px-10 py-6 text-right font-black text-slate-900 text-sm">
-                  {log.finalStock}
-                </td>
-                <td className="px-10 py-6 text-right">
-                  <div className="flex flex-col items-end">
-                    <p className="text-[10px] font-black text-slate-900 uppercase">{log.responsible || 'Système_Root'}</p>
-                    <div className="flex items-center gap-1 text-[8px] font-black text-emerald-500 uppercase tracking-widest"><ShieldCheck className="w-2.5 h-2.5" /> Signé</div>
-                  </div>
-                </td>
-              </tr>
-            )) : (
-              <tr>
-                <td colSpan={6} className="px-10 py-32 text-center">
-                  <div className="space-y-6 opacity-20 max-w-xs mx-auto">
-                    <HistoryIcon className="w-16 h-16 mx-auto text-[#143d21]" />
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] italic leading-relaxed">Aucun mouvement n'a été enregistré.</p>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
-  const SettingsView = () => (
-    <div className="space-y-12 animate-in fade-in duration-500 pb-20">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white p-12 border rounded-[3.5rem] shadow-sm space-y-10">
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-emerald-50 rounded-3xl flex items-center justify-center text-emerald-600 shadow-inner"><User className="w-8 h-8" /></div>
-            <div>
-              <h3 className="text-2xl font-black italic uppercase tracking-tighter leading-none">Profil Administrateur Pro</h3>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Identité & Certificats de sécurité ERP</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <InputField label="NOM COMPLET" value="Admin_Pro_SS" />
-            <InputField label="ADRESSE E-MAIL" value="superviseur@smartstock.pro" />
-            <InputField label="RÔLE SYSTÈME" value="Super-Administrateur" readOnly />
-            <InputField label="CLÉ DE SIGNATURE" value=".........." type="password" readOnly />
-          </div>
-          <div className="flex gap-4">
-            <button className="px-10 py-5 bg-[#143d21] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all">Mettre à jour le profil</button>
-            <button 
-              onClick={() => {
-                setConfirmModal({
-                  isOpen: true,
-                  title: "Remise à zéro totale",
-                  message: "Attention ! Cette action effacera TOUTES vos données locales (Produits, Mobilier, Historique). Il n'y a pas de retour possible.",
-                  type: 'danger',
-                  onConfirm: () => {
-                    localStorage.clear();
-                    window.location.reload();
-                  }
-                });
-              }} 
-              className="px-10 py-5 bg-rose-50 text-rose-600 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest border border-rose-100 flex items-center gap-2 hover:bg-rose-100 transition-all"
-            >
-              <Trash2 className="w-3 h-3" /> Remise à Zéro Totale
-            </button>
-          </div>
-        </div>
-        <div className="bg-[#143d21] p-12 rounded-[3.5rem] text-white space-y-10 shadow-2xl">
-          <div className="flex items-center gap-4">
-            <ShieldCheck className="w-6 h-6 text-emerald-400" />
-            <h3 className="text-xl font-black italic uppercase tracking-tighter">Sécurité & Persistence</h3>
-          </div>
-          <div className="space-y-8">
-            <ToggleOption label="Auto-sauvegarde Locale" desc="VOS DONNÉES SONT DANS LE NAVIGATEUR" active />
-            <ToggleOption label="Audit log blockchain" desc="ENREGISTREMENT CONTINU DES FLUX" active />
-            <ToggleOption label="Synchronisation cloud" desc="SAUVEGARDE MIROIR TEMPS RÉEL" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const ImportView = () => (
-    <div className="flex items-center justify-center min-h-[60vh] animate-in fade-in duration-500 relative">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 w-full max-w-5xl">
-        <ImportCard icon={Camera} title="VISION AUTOMATIQUE" desc="EXTRACTION PAR RECONNAISSANCE VISUELLE" color="emerald" onFile={handleFileUpload} />
-        <ImportCard icon={FileSpreadsheet} title="IMPORTATION MASSIVE" desc="INTÉGRATION FICHIER STRUCTURE CSV/EXCEL" color="blue" onFile={handleFileUpload} />
-      </div>
-    </div>
-  );
-
-  const ReportView = () => (
-    <div className="flex items-center justify-center min-h-[70vh] animate-in fade-in duration-500">
-      {aiReport ? (
-        <div className="bg-white w-full max-w-4xl rounded-[4rem] p-12 shadow-2xl border-t-8 border-[#143d21] space-y-8 overflow-y-auto max-h-[80vh] animate-modal">
-          <div className="flex justify-between items-center">
-             <h3 className="text-2xl font-black italic uppercase tracking-tighter">Rapport d'Audit Automatique</h3>
-             <button onClick={() => setAiReport(null)} className="p-4 bg-slate-100 rounded-2xl hover:bg-rose-50 hover:text-rose-500 transition-all"><X className="w-6 h-6" /></button>
-          </div>
-          <div className="space-y-6 text-left">
-            <div>
-              <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Résumé Exécutif</h4>
-              <p className="text-sm font-medium text-slate-700 leading-relaxed italic">{aiReport.summary}</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-black uppercase text-rose-500 tracking-widest mb-2">Alertes Critiques</h4>
-                <ul className="space-y-2">
-                  {aiReport.criticalAlerts.map((a, i) => <li key={i} className="text-[11px] font-bold text-rose-600 bg-rose-50 p-3 rounded-xl flex items-start gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> {a}</li>)}
-                </ul>
-              </div>
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-black uppercase text-emerald-500 tracking-widest mb-2">Recommandations</h4>
-                <ul className="space-y-2">
-                  {aiReport.recommendations.map((r, i) => <li key={i} className="text-[11px] font-bold text-emerald-600 bg-emerald-50 p-3 rounded-xl flex items-start gap-2"><ShieldCheck className="w-4 h-4 shrink-0" /> {r}</li>)}
-                </ul>
-              </div>
-            </div>
-            <div className="p-6 bg-[#143d21] rounded-3xl text-white shadow-xl">
-              <h4 className="text-[10px] font-black uppercase tracking-widest mb-2 text-emerald-400">Projection Financière</h4>
-              <p className="text-sm font-black italic">{aiReport.financialProjection}</p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white w-full max-w-3xl rounded-[3rem] p-16 shadow-2xl border-t-8 border-[#143d21] text-center space-y-10">
-          <div className="w-24 h-24 bg-emerald-50 rounded-3xl flex items-center justify-center mx-auto shadow-inner"><BarChart3 className="w-12 h-12 text-[#143d21]" /></div>
-          <div className="space-y-4">
-            <h3 className="text-4xl font-black italic uppercase tracking-tighter leading-none">Certification Logistique Automatique</h3>
-            <p className="text-slate-500 font-medium max-w-md mx-auto leading-relaxed">Analyse instantanée de vos données locales par l'Automatique.</p>
-          </div>
-          <button onClick={handleAiReport} disabled={isAiLoading || products.length === 0} className="px-12 py-6 bg-[#143d21] text-white rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl flex items-center justify-center gap-4 mx-auto hover:bg-black transition-all disabled:opacity-50">
-            {isAiLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-            {products.length === 0 ? "Ajoutez des articles pour l'audit" : "Générer le rapport officiel"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  const StudioView = () => {
-    const [studioPrompt, setStudioPrompt] = useState('');
-    const [studioResult, setStudioResult] = useState<string | null>(null);
-    const [isGenerating, setIsGenerating] = useState(false);
-
-    const handleGenerateStudioImage = async () => {
-      if (!studioPrompt) return;
-      setIsGenerating(true);
-      try {
-        const res = await generateProductImage(studioPrompt);
-        setStudioResult(res);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setIsGenerating(false);
-      }
-    };
-
-    return (
-      <div className="flex items-center justify-center min-h-[70vh] animate-in fade-in duration-500">
-        <div className="bg-white w-full max-w-3xl rounded-[3rem] p-12 shadow-2xl border flex flex-col gap-10">
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center shadow-inner"><ImageIcon className="w-8 h-8 text-[#143d21]" /></div>
-            <div className="space-y-1">
-              <h3 className="text-2xl font-black italic uppercase tracking-tighter leading-none">Studio Photo Automatique</h3>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Génération de visuels catalogue par Automatique</p>
-            </div>
-          </div>
-          <textarea 
-            value={studioPrompt}
-            onChange={(e) => setStudioPrompt(e.target.value)}
-            placeholder="Décrivez l'actif à visualiser (ex: Bureau exécutif en chêne sombre, éclairage doux)..." 
-            className="w-full h-48 p-8 bg-slate-50 rounded-[2rem] outline-none font-bold text-slate-900 resize-none italic focus:bg-white transition-all border-none" 
-          />
-          {studioResult && (
-            <div className="relative group rounded-[2rem] overflow-hidden border">
-              <img src={studioResult} alt="Generated asset" className="w-full aspect-square object-cover" />
-              <button onClick={() => setStudioResult(null)} className="absolute top-4 right-4 p-3 bg-white/90 backdrop-blur rounded-xl shadow-lg hover:text-rose-500 transition-all"><X className="w-4 h-4" /></button>
-            </div>
-          )}
-          <button 
-            onClick={handleGenerateStudioImage}
-            disabled={isGenerating || !studioPrompt}
-            className="w-full py-8 bg-black text-white rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl flex items-center justify-center gap-4 hover:scale-[1.02] transition-transform disabled:opacity-50"
-          >
-            {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
-            Générer le visuel professionnel
-          </button>
-        </div>
-      </div>
-    );
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit_complet_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    showToast("Rapport d'audit exporté");
   };
 
   if (!isLoggedIn) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-6 relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-1/2 h-1/2 bg-emerald-300 rounded-full blur-[150px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-1/2 h-1/2 bg-blue-300 rounded-full blur-[150px]" />
-      </div>
-
-      <div className="bg-white p-12 lg:p-24 rounded-[5rem] shadow-[0_40px_100px_-15px_rgba(0,0,0,0.1)] w-full max-w-3xl space-y-16 border relative animate-in zoom-in-95 duration-500">
-        <div className="flex flex-col items-center text-center space-y-8">
-          <div className="inline-flex p-10 bg-[#143d21] rounded-[3.5rem] text-white shadow-2xl ring-8 ring-emerald-50 animate-bounce-slow">
-            <ShieldCheck className="w-16 h-16" />
-          </div>
-          <div className="space-y-4">
-            <h2 className="text-7xl lg:text-8xl font-black italic uppercase tracking-tighter text-slate-900 leading-none">SmartStock</h2>
-            <p className="text-[11px] font-black text-emerald-600 uppercase tracking-[0.5em] italic">Enterprise Logistical Operating System • v4.0</p>
-          </div>
-          <p className="text-slate-400 text-sm font-medium max-w-sm mx-auto leading-relaxed">
-            Bienvenue dans votre plateforme de gestion de stock intelligente. Connectez-vous pour accéder à vos inventaires et audits Automatiques.
-          </p>
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+      <div className="bg-white p-24 rounded-[5rem] shadow-2xl text-center space-y-16 animate-fade-in border border-slate-100">
+        <div className="inline-flex p-12 bg-[#143d21] rounded-[4rem] text-white shadow-3xl animate-bounce-slow">
+          <ShieldCheck className="w-20 h-20" />
         </div>
-
+        <div className="space-y-4">
+          <h2 className="text-8xl font-black italic uppercase tracking-tighter text-slate-900 leading-none">SmartStock</h2>
+          <p className="text-[12px] font-black text-emerald-600 uppercase tracking-[0.5em] italic">Enterprise Algorithm v4.5</p>
+        </div>
         <div className="space-y-6">
-          <button 
-            onClick={() => {
-              setIsLoggedIn(true);
-              showToast("Connexion sécurisée établie");
-            }} 
-            className="group w-full py-8 bg-[#143d21] text-white rounded-[3.5rem] font-black uppercase text-sm tracking-widest shadow-2xl hover:bg-black transition-all flex items-center justify-center gap-4"
-          >
-            Démarrer la session <ArrowRightLeft className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
-          </button>
+          <button onClick={handleLogin} className="w-full py-10 bg-[#143d21] text-white rounded-[4rem] font-black uppercase text-sm tracking-widest shadow-2xl hover:bg-black transition-all">Accéder au Système</button>
         </div>
       </div>
     </div>
@@ -1239,197 +911,213 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
-      <aside className="fixed inset-y-0 left-0 z-50 w-80 bg-[#143d21] m-6 rounded-[3.5rem] p-8 flex flex-col text-white shadow-2xl">
-        <div className="mb-10 px-4 py-2 border-b border-white/5 pb-8 flex items-center gap-3">
-          <ShieldCheck className="w-6 h-6 text-emerald-400" />
-          <h1 className="text-xl font-black italic uppercase tracking-tighter leading-none">SmartStock</h1>
+      <aside className="fixed inset-y-0 left-0 z-50 w-80 bg-[#143d21] m-6 rounded-[3.5rem] p-10 flex flex-col text-white shadow-2xl no-print">
+        <div className="mb-14 px-4 py-2 border-b border-white/5 pb-10 flex items-center gap-4">
+          <ShieldCheck className="w-8 h-8 text-emerald-400" />
+          <h1 className="text-2xl font-black italic uppercase tracking-tighter">SmartStock</h1>
         </div>
-        <nav className="flex-1 space-y-3 overflow-y-auto no-scrollbar pr-2">
-          <NavItem active={activeView === 'dashboard'} onClick={()=>setActiveView('dashboard')} icon={LayoutDashboard} label="Tableau de bord" />
-          <NavItem active={activeView === 'inventory'} onClick={()=>setActiveView('inventory')} icon={Box} label="Stocks / Inventaire" />
-          <NavItem active={activeView === 'furniture'} onClick={()=>setActiveView('furniture')} icon={Armchair} label="Mobilier & Actifs" />
-          <NavItem active={activeView === 'import'} onClick={()=>setActiveView('import')} icon={Upload} label="Import Automatique" />
-          <NavItem active={activeView === 'history'} onClick={()=>setActiveView('history')} icon={HistoryIcon} label="Historique / Audit" />
-          <NavItem active={activeView === 'monthly_report'} onClick={()=>setActiveView('monthly_report')} icon={FileText} label="Reporting Automatique" />
-          <NavItem active={activeView === 'studio'} onClick={()=>setActiveView('studio')} icon={ImageIcon} label="Studio Photo" />
-          <NavItem active={activeView === 'settings'} onClick={()=>setActiveView('settings')} icon={SettingsIcon} label="Paramètres" />
-        </nav>
-        
-        <button 
-          onClick={() => {
-            setConfirmModal({
-              isOpen: true,
-              title: "Déconnexion sécurisée",
-              message: "Souhaitez-vous fermer votre session de travail actuelle ? Toutes vos données resteront enregistrées localement.",
-              type: 'info',
-              onConfirm: () => {
-                setIsLoggedIn(false);
-                setConfirmModal(prev => ({ ...prev, isOpen: false }));
-              }
-            });
-          }} 
-          className="mt-8 flex items-center justify-center gap-3 py-5 bg-white/5 hover:bg-rose-600 text-white/50 hover:text-white rounded-[2.5rem] font-black uppercase text-[10px] tracking-widest transition-all"
-        >
-          <LogOut className="w-4 h-4" /> Quitter l'ERP
+        <div className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
+          <NavItem active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} icon={LayoutDashboard} label="Tableau de bord" />
+          <NavItem active={activeView === 'inventory'} onClick={() => setActiveView('inventory')} icon={Box} label="Stocks / Inventaire" />
+          <NavItem active={activeView === 'furniture'} onClick={() => setActiveView('furniture')} icon={Armchair} label="Mobilier & Actifs" />
+          <NavItem active={activeView === 'import'} onClick={() => setActiveView('import')} icon={FileSpreadsheet} label="Import Automatisé" />
+          <NavItem active={activeView === 'history'} onClick={() => setActiveView('history')} icon={HistoryIcon} label="Historique / Audit" />
+          <NavItem active={activeView === 'monthly_report'} onClick={() => setActiveView('monthly_report')} icon={FileText} label="Reporting Statistique" />
+          <NavItem active={activeView === 'settings'} onClick={() => setActiveView('settings')} icon={SettingsIcon} label="Paramètres" />
+        </div>
+        <button onClick={() => setIsLoggedIn(false)} className="mt-12 flex items-center justify-center gap-3 py-6 bg-white/5 hover:bg-rose-600 text-white/50 hover:text-white rounded-[2rem] font-black uppercase text-[10px] tracking-widest transition-all">
+          <LogOut className="w-4 h-4" /> Fermer la Session
         </button>
       </aside>
 
-      <main className="flex-1 p-10 lg:p-14 lg:ml-80">
-        <header className="flex justify-between items-center mb-12">
-          <div className="space-y-3">
-            <h2 className="text-6xl font-black text-slate-900 italic uppercase tracking-tighter leading-none">{viewLabels[activeView] || activeView}</h2>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] flex items-center gap-2">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" /> Système de gestion industrielle opérationnel
-            </p>
+      <main className="flex-1 p-14 lg:ml-80">
+        <header className="flex justify-between items-end mb-16 no-print">
+          <div className="space-y-4">
+            <h2 className="text-7xl font-black text-slate-900 italic uppercase tracking-tighter leading-none">{viewLabels[activeView]}</h2>
+            <div className="flex items-center gap-3">
+              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic leading-none">Moteur algorithmique opérationnel</p>
+            </div>
           </div>
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 px-4 py-3 bg-white border rounded-full text-[10px] font-black text-slate-800 shadow-sm"><Globe className="w-4 h-4 text-emerald-600" /> DRC_HQ_01</div>
-            <button className="p-4 bg-white border rounded-full text-slate-400 shadow-sm hover:text-emerald-600 transition-all"><Printer className="w-5 h-5" /></button>
-            <div className="flex items-center gap-3 bg-white border pr-6 p-1.5 rounded-full shadow-sm">
-              <div className="w-10 h-10 bg-[#143d21] rounded-full flex items-center justify-center text-white text-xs font-black">AD</div>
-              <div className="hidden lg:block"><p className="text-[10px] font-black text-slate-900 uppercase">Admin ERP</p><p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Superviseur Pro</p></div>
+            <div className="flex items-center gap-2 bg-white px-5 py-3 rounded-2xl border border-slate-100 shadow-sm text-[9px] font-black text-slate-600 uppercase tracking-widest leading-none">
+              <Coins className="w-4 h-4 text-amber-600" /> Taux: {exchangeRate}
+            </div>
+            <button onClick={() => window.print()} className="p-4 bg-white border border-slate-100 rounded-2xl text-slate-500 hover:text-[#143d21] shadow-sm"><Printer className="w-5 h-5" /></button>
+            <div className="flex items-center gap-4 bg-white border border-slate-100 pr-8 p-1.5 rounded-full shadow-sm">
+              <div className="w-12 h-12 bg-[#143d21] rounded-full flex items-center justify-center text-white text-xs font-black">AD</div>
+              <div>
+                <p className="text-[11px] font-black text-slate-900 uppercase leading-none mb-1">Admin ERP</p>
+                <p className="text-[8px] font-black text-emerald-500 uppercase leading-none">Superviseur Pro</p>
+              </div>
             </div>
           </div>
         </header>
 
         <div className="pb-32">
-          {activeView === 'dashboard' && <DashboardView />}
-          {activeView === 'inventory' && <InventoryView />}
-          {activeView === 'furniture' && <FurnitureView />}
-          {activeView === 'import' && <ImportView />}
-          {activeView === 'history' && <HistoryView />}
-          {activeView === 'monthly_report' && <ReportView />}
-          {activeView === 'studio' && <StudioView />}
-          {activeView === 'settings' && <SettingsView />}
+          {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} setActiveView={setActiveView} exchangeRate={exchangeRate} />}
+          {activeView === 'inventory' && <InventoryView products={products} searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleExport={handleExportCSV} setIsEditModalOpen={setIsEditModalOpen} setEditingProduct={setEditingProduct} exchangeRate={exchangeRate} />}
+          {activeView === 'furniture' && <FurnitureView furniture={furniture} searchTerm={searchTerm} setSearchTerm={setSearchTerm} setIsEditModalOpen={setIsEditModalOpen} setEditingFurniture={setEditingFurniture} />}
+          {activeView === 'history' && <HistoryView history={history} searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleExport={handleExportAuditCSV} />}
+          {activeView === 'monthly_report' && <ReportingView products={products} history={history} exchangeRate={exchangeRate} />}
+          {activeView === 'import' && <ImportView onImportSuccess={handleImportSuccess} showToast={showToast} />}
+          {activeView === 'settings' && <SettingsView exchangeRate={exchangeRate} setExchangeRate={setExchangeRate} />}
         </div>
       </main>
 
-      {isAiLoading && activeView === 'import' && <ExtractionLoader />}
-      {isEditModalOpen && <EditModal />}
-      <ConfirmationModal />
+      {/* Product Edit Modal */}
+      {isEditModalOpen && activeView === 'inventory' && (
+        <Modal 
+          title={editingProduct ? "Modifier" : "Ajouter"} 
+          onClose={() => setIsEditModalOpen(false)} 
+          onSave={handleSaveProduct}
+        >
+          <div className="grid grid-cols-2 gap-8">
+            <Field label="Désignation" value={editingProduct?.name || ''} onChange={(v:any) => setEditingProduct({...(editingProduct || { id: '', currentStock: 0, minStock: 5, unitPrice: 0, unit: 'pces', currency: 'Fc', category: 'Matériel', siteId: 'S1', lastInventoryDate: new Date().toISOString() } as any), name: v})} />
+            <Field label="Catégorie" value={editingProduct?.category || 'Matériel'} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), category: v})} type="select" options={INITIAL_CATEGORIES} />
+            <Field label="Stock Disponible" value={editingProduct?.currentStock || 0} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), currentStock: parseInt(v) || 0})} type="number" />
+            <Field label="Seuil d'Alerte" value={editingProduct?.minStock || 5} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), minStock: parseInt(v) || 5})} type="number" />
+            <Field label="Prix Unitaire" value={editingProduct?.unitPrice || 0} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), unitPrice: parseFloat(v) || 0})} type="number" />
+            <Field label="Devise" value={editingProduct?.currency || 'Fc'} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), currency: v})} type="select" options={['Fc', '$']} />
+            <Field label="Unité" value={editingProduct?.unit || 'pces'} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), unit: v})} type="select" options={['pces', 'kg', 'L', 'bidons', 'paquets', 'mètres']} />
+            
+            <div className="col-span-2 p-8 bg-emerald-50/50 rounded-3xl border border-emerald-100 flex justify-between items-center">
+               <div>
+                 <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">Valorisation (Fc)</p>
+                 <h4 className="text-3xl font-black italic text-emerald-800 tabular-nums leading-none">
+                   {((editingProduct?.currentStock || 0) * (editingProduct?.currency === '$' ? (editingProduct?.unitPrice || 0) * exchangeRate : (editingProduct?.unitPrice || 0))).toLocaleString()} Fc
+                 </h4>
+               </div>
+               <div className="text-right">
+                 <Badge status={editingProduct?.currentStock === 0 ? 'CRITIQUE' : (editingProduct?.currentStock && editingProduct?.minStock && editingProduct.currentStock <= editingProduct.minStock ? 'RÉAPPRO' : 'OPTIMAL')} />
+               </div>
+            </div>
+          </div>
+        </Modal>
+      )}
 
-      {isReviewOpen && (
-        <div className="fixed inset-0 z-[350] flex items-center justify-center p-8 bg-slate-900/80 backdrop-blur-md animate-in fade-in">
-           <div className="bg-white w-full max-w-5xl rounded-[4rem] p-12 shadow-2xl flex flex-col max-h-[90vh] animate-modal">
-              <div className="flex justify-between items-center mb-10 shrink-0">
-                 <div><h3 className="text-3xl font-black italic uppercase tracking-tighter leading-none">Vérification Import Automatique</h3><p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-1">Validez les données extraites et leur classification.</p></div>
-                 <button onClick={() => setIsReviewOpen(false)} className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:bg-rose-50 hover:text-rose-500 transition-all"><X className="w-6 h-6" /></button>
-              </div>
-              <div className="flex-1 overflow-y-auto pr-4 mb-10">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 sticky top-0 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    <tr>
-                      <th className="px-6 py-4">Désignation</th>
-                      <th className="px-6 py-4 text-center">Catégorie Automatique</th>
-                      <th className="px-6 py-4 text-center">Qté</th>
-                      <th className="px-6 py-4 text-right">Prix</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {importData.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="px-6 py-5 font-black text-xs uppercase italic text-slate-900">{item.name}</td>
-                        <td className="px-6 py-5 text-center">
-                          <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase italic border border-emerald-100">{item.category}</span>
-                        </td>
-                        <td className="px-6 py-5 text-center font-black text-emerald-600">{item.currentStock}</td>
-                        <td className="px-6 py-5 text-right font-black italic">{item.unitPrice?.toLocaleString()} Fc</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <button onClick={confirmImport} className="w-full py-6 bg-[#143d21] text-white rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-black transition-all">Valider l'Intégration Stock</button>
-           </div>
-        </div>
+      {/* Furniture Edit Modal */}
+      {isEditModalOpen && activeView === 'furniture' && (
+        <Modal 
+          title="Actif Immobilisé" 
+          onClose={() => setIsEditModalOpen(false)} 
+          onSave={handleSaveFurniture}
+        >
+          <div className="grid grid-cols-2 gap-10">
+            <Field label="Désignation" value={editingFurniture?.name || ''} onChange={(v:any) => setEditingFurniture({...(editingFurniture || { id: `${Date.now()}`, code: `INV-${Date.now()}` } as any), name: v})} />
+            <Field label="Code Inventaire" value={editingFurniture?.code || ''} onChange={(v:any) => setEditingFurniture({...(editingFurniture || {} as any), code: v})} />
+            <Field label="Affectation" value={editingFurniture?.assignedTo || ''} onChange={(v:any) => setEditingFurniture({...(editingFurniture || {} as any), assignedTo: v})} />
+            <Field label="État" value={editingFurniture?.condition || 'Bon'} onChange={(v:any) => setEditingFurniture({...(editingFurniture || {} as any), condition: v})} type="select" options={['Neuf', 'Bon', 'Usé', 'Endommagé']} />
+            <Field label="Valeur" value={editingFurniture?.purchasePrice || 0} onChange={(v:any) => setEditingFurniture({...(editingFurniture || {} as any), purchasePrice: parseInt(v) || 0})} type="number" />
+            <Field label="Quantité" value={editingFurniture?.currentCount || 1} onChange={(v:any) => setEditingFurniture({...(editingFurniture || {} as any), currentCount: parseInt(v) || 1})} type="number" />
+          </div>
+        </Modal>
       )}
 
       {notification && (
-        <div className={`fixed bottom-12 left-1/2 -translate-x-1/2 z-[300] px-12 py-8 rounded-[3rem] shadow-2xl border-2 flex items-center gap-6 bg-white animate-in slide-in-from-bottom-10 ${notification.type === 'error' ? 'text-rose-600 border-rose-100' : 'text-[#143d21] border-emerald-100'}`}>
-          <Zap className="w-8 h-8" /><p className="text-sm font-bold text-slate-500 italic uppercase">{notification.message}</p>
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 px-12 py-8 bg-white border-2 border-emerald-100 rounded-[3rem] shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom-10 z-[300]">
+          <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+          <p className="text-sm font-black uppercase italic text-slate-700 tracking-widest">{notification.message}</p>
         </div>
       )}
     </div>
   );
 };
 
-const NavItem = ({ active, onClick, icon: Icon, label }: any) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-5 px-8 py-6 transition-all duration-300 group ${active ? 'bg-white text-[#143d21] rounded-full shadow-lg scale-[1.02]' : 'text-white/70 hover:text-white hover:translate-x-1'}`}>
-    <Icon className={`w-6 h-6 ${active ? 'text-[#143d21]' : 'text-white/40'}`} />
-    <span className="text-[11px] font-black uppercase tracking-[0.1em] text-left leading-tight">{label}</span>
-  </button>
-);
-
-const StatCard = ({ label, value, icon: Icon, trend, alert }: any) => (
-  <div className={`bg-white p-8 border rounded-[2.5rem] shadow-sm hover:shadow-2xl transition-all relative overflow-hidden group ${alert ? 'border-rose-100' : ''}`}>
-    <div className={`p-4 rounded-2xl w-max mb-6 ${alert ? 'bg-rose-50 text-rose-500' : 'bg-slate-50 text-slate-300 group-hover:bg-emerald-50 group-hover:text-emerald-600'}`}><Icon className="w-6 h-6" /></div>
-    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-    <div className="flex items-end justify-between">
-      <h4 className={`text-2xl font-black italic tracking-tighter tabular-nums leading-none ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h4>
-      {trend && <span className={`text-[9px] font-black px-3 py-1 rounded-full ${trend.includes('+') ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400 bg-slate-50'}`}>{trend}</span>}
+const Modal = ({ title, children, onClose, onSave }: any) => (
+  <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in">
+    <div className="bg-white w-full max-w-2xl rounded-[4rem] p-16 space-y-12 shadow-2xl relative">
+      <button onClick={onClose} className="absolute top-12 right-12 p-4 text-slate-400 hover:text-rose-500 transition-colors"><X className="w-10 h-10" /></button>
+      <h3 className="text-5xl font-black italic uppercase tracking-tighter text-slate-900 leading-none">{title}</h3>
+      {children}
+      <button onClick={onSave} className="w-full py-10 bg-[#143d21] text-white rounded-[3rem] font-black uppercase text-xs tracking-widest shadow-2xl transition-all hover:bg-black">Confirmer</button>
     </div>
   </div>
 );
 
-const WorkflowAction = ({ icon: Icon, label, onClick }: any) => (
-  <button onClick={onClick} className="w-full flex items-center justify-between p-5 bg-slate-50/50 rounded-2xl border border-transparent hover:bg-white hover:shadow-lg hover:border-slate-100 transition-all group">
-    <div className="flex items-center gap-4 text-[10px] font-black text-slate-900 italic uppercase">
-      <div className="p-3 bg-white border rounded-xl shadow-sm text-slate-300 group-hover:text-[#143d21] transition-colors"><Icon className="w-4 h-4" /></div>
-      {label}
-    </div>
-    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-[#143d21]" />
-  </button>
-);
-
-const ImportCard = ({ icon: Icon, title, desc, color, onFile }: any) => (
-  <label className={`bg-white p-12 border-4 border-dashed border-slate-100 rounded-[4rem] text-center space-y-8 hover:border-${color}-500/20 hover:shadow-2xl transition-all cursor-pointer group relative`}>
-    <input type="file" className="hidden" onChange={onFile} />
-    <div className={`w-24 h-24 bg-${color}-50 text-${color}-600 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-inner transition-transform group-hover:scale-105 duration-300`}><Icon className="w-12 h-12" /></div>
-    <div className="space-y-3">
-      <h3 className="text-3xl font-black italic uppercase tracking-tighter leading-none">{title}</h3>
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{desc}</p>
-    </div>
-  </label>
-);
-
-const InputField = ({ label, value, readOnly, type = "text" }: any) => (
+const Field = ({ label, value, onChange, type = "text", options = [] }: any) => (
   <div className="space-y-3">
-    <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</label>
-    <input 
-      type={type} 
-      defaultValue={value} 
-      readOnly={readOnly}
-      className={`w-full p-5 bg-slate-50 rounded-2xl outline-none font-black italic text-sm ${readOnly ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900 focus:bg-white focus:ring-1 focus:ring-emerald-500/10 transition-all'}`} 
-    />
+    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none ml-2">{label}</p>
+    {type === 'select' ? (
+      <select value={value} onChange={e => onChange(e.target.value)} className="w-full p-6 bg-slate-50 border-none rounded-3xl font-bold text-slate-800 outline-none cursor-pointer focus:ring-2 ring-emerald-500/10">
+        {options.map((o:any) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    ) : (
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} className="w-full p-6 bg-slate-50 border-none rounded-3xl font-bold text-slate-800 outline-none focus:ring-2 ring-emerald-500/10" />
+    )}
   </div>
 );
 
-const ToggleOption = ({ label, desc, active }: any) => (
-  <div className="flex justify-between items-center group">
-    <div className="space-y-1">
-      <p className="text-sm font-black italic uppercase tracking-tighter">{label}</p>
-      <p className="text-[8px] font-black text-emerald-100/40 uppercase tracking-widest">{desc}</p>
+const SettingsView = ({ exchangeRate, setExchangeRate }: any) => (
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 animate-fade-in">
+    <div className="lg:col-span-2 space-y-8">
+      <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm relative overflow-hidden">
+        <div className="flex items-center gap-10 mb-12">
+           <div className="w-24 h-24 bg-emerald-50 rounded-[2.5rem] flex items-center justify-center text-emerald-700 border border-emerald-100">
+             <User className="w-12 h-12" />
+           </div>
+           <div>
+             <h3 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900 mb-2">Profil Administrateur</h3>
+             <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest italic">Configuration globale du système</p>
+           </div>
+        </div>
+        <div className="grid grid-cols-2 gap-10">
+          <div className="space-y-3"><p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Identifiant</p><div className="p-6 bg-slate-50 rounded-2xl font-black italic text-slate-900">Admin_Pro_DRC</div></div>
+          <div className="space-y-3"><p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Email Audit</p><div className="p-6 bg-slate-50 rounded-2xl font-black italic text-slate-900">audit@smartstock.local</div></div>
+        </div>
+      </div>
+
+      <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm relative overflow-hidden">
+        <div className="flex items-center gap-6 mb-10">
+          <Coins className="w-10 h-10 text-amber-500" />
+          <div>
+            <h3 className="text-2xl font-black italic uppercase tracking-tighter text-slate-900 leading-none mb-2">Taux de Change Global</h3>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Conversion algorithmique des devises</p>
+          </div>
+        </div>
+        <div className="max-w-xs space-y-6">
+          <div className="space-y-3">
+             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none ml-2">Taux: 1 $ = ? Fc</p>
+             <div className="relative group">
+               <input 
+                 type="number" 
+                 value={exchangeRate}
+                 onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 0)}
+                 className="w-full p-8 bg-slate-50 border-none rounded-[2rem] font-black text-2xl text-slate-900 outline-none tabular-nums focus:ring-2 ring-[#143d21]/10 transition-all"
+               />
+               <span className="absolute right-8 top-1/2 -translate-y-1/2 font-black text-slate-300 italic">Fc</span>
+             </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <button className={`w-12 h-6 rounded-full transition-colors relative ${active ? 'bg-emerald-500' : 'bg-white/10'}`}>
-      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${active ? 'left-7' : 'left-1'}`} />
-    </button>
+    <div className="space-y-8">
+       <div className="bg-[#143d21] p-12 rounded-[3.5rem] text-white shadow-2xl space-y-10">
+          <div className="flex items-center gap-4"><Shield className="w-8 h-8 text-emerald-400" /><h4 className="text-xl font-black italic uppercase tracking-tighter leading-none">Système Local</h4></div>
+          <div className="space-y-8">
+            <Toggle label="Base de données locale" sub="Stockage navigateur persistant" active />
+            <Toggle label="Algorithmes déterministes" sub="Pas de traitement Cloud" active />
+            <Toggle label="Chiffrement session" sub="Sécurité des registres active" active />
+          </div>
+       </div>
+    </div>
+  </div>
+);
+
+const Toggle = ({ label, sub, active }: any) => (
+  <div className="flex items-center justify-between group">
+    <div>
+      <h6 className="text-[11px] font-black uppercase tracking-tight italic mb-1">{label}</h6>
+      <p className="text-[8px] font-bold text-emerald-100/80 uppercase italic leading-none">{sub}</p>
+    </div>
+    <div className={`w-12 h-6 rounded-full p-1 relative transition-colors ${active ? 'bg-emerald-500' : 'bg-white/10'}`}>
+      <div className={`w-4 h-4 bg-white rounded-full transition-transform ${active ? 'translate-x-6' : 'translate-x-0'}`} />
+    </div>
   </div>
 );
 
 const viewLabels: Record<ViewType, string> = {
-  dashboard: 'TABLEAU DE BORD',
-  inventory: 'STOCKS / INVENTAIRE',
-  furniture: 'MOBILIER & ACTIFS',
-  import: 'IMPORT AUTOMATIQUE',
-  history: 'HISTORIQUE / AUDIT',
-  monthly_report: 'REPORTING AUTOMATIQUE',
-  studio: 'STUDIO PHOTO',
-  settings: 'PARAMÈTRES SYSTÈME',
-  replenishment: 'RÉAPPROVISIONNEMENT',
-  suppliers: 'FOURNISSEURS',
-  sites: 'RÉSEAU LOGISTIQUE',
-  analytics: 'ANALYSES',
-  forecasting: 'PRÉVISIONS'
+  dashboard: 'Tableau de bord', inventory: 'Stocks / Inventaire', furniture: 'Mobilier & Actifs', replenishment: 'Réappro', history: 'Historique / Audit', suppliers: 'Fournisseurs', sites: 'Sites', analytics: 'BI', forecasting: 'Prévisions', monthly_report: 'Reporting Statistique', import: 'Import Automatisé', settings: 'Paramètres Système'
 };
 
 export default App;

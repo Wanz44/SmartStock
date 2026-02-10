@@ -83,5 +83,4 @@ export type ViewType =
   | 'forecasting'
   | 'settings' 
   | 'monthly_report' 
-  | 'studio' 
   | 'import';
