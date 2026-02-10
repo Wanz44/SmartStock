@@ -15,7 +15,8 @@ import {
   AlertCircle,
   Coins,
   ClipboardList,
-  FileUp
+  FileUp,
+  RefreshCcw
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -69,47 +70,109 @@ const NavItem = ({ active, onClick, icon: Icon, label }: any) => (
 // --- Sub-Views ---
 
 const DashboardView = ({ products, furniture, history, setActiveView, exchangeRate }: any) => {
-  const totalVal = products.reduce((a: any, b: any) => {
+  const totalValFc = products.reduce((a: any, b: any) => {
     const price = b.currency === '$' ? b.unitPrice * exchangeRate : b.unitPrice;
     return a + (b.currentStock * price);
   }, 0);
-  const totalAssets = furniture.reduce((a: any, b: any) => a + (b.purchasePrice || 0), 0);
+  const totalValUsd = totalValFc / exchangeRate;
+  
+  const totalAssetsFc = furniture.reduce((a: any, b: any) => a + (b.purchasePrice || 0), 0);
+  const totalAssetsUsd = totalAssetsFc / exchangeRate;
+  
   const ruptures = products.filter((p: any) => p.currentStock <= p.minStock).length;
+
+  const chartData = useMemo(() => {
+    const stats: Record<string, number> = {};
+    products.forEach(p => {
+      const price = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
+      stats[p.category] = (stats[p.category] || 0) + (p.currentStock * price);
+    });
+    return Object.entries(stats).map(([label, valeur]) => ({ label, valeur }));
+  }, [products, exchangeRate]);
 
   return (
     <div className="space-y-10 animate-fade-in">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatCard label="Valeur Consommables" value={`${totalVal.toLocaleString()} Fc`} icon={DollarSign} badge="RÉEL" />
-        <StatCard label="Patrimoine Immobilisé" value={`${totalAssets.toLocaleString()} Fc`} icon={Database} badge={furniture.length > 0 ? "ACTIF" : "VIDE"} />
+        <StatCard 
+          label="Valeur Consommables" 
+          value={`${totalValFc.toLocaleString()} Fc`} 
+          subValue={`${totalValUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} $`}
+          icon={DollarSign} 
+          badge="RÉEL" 
+        />
+        <StatCard 
+          label="Patrimoine Mobilier" 
+          value={`${totalAssetsFc.toLocaleString()} Fc`} 
+          subValue={`${totalAssetsUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} $`}
+          icon={Database} 
+          badge={furniture.length > 0 ? "ACTIF" : "VIDE"} 
+        />
         <StatCard label="Ruptures de Stock" value={ruptures} icon={AlertTriangle} alert={ruptures > 0} />
         <StatCard label="Actifs Gérés" value={furniture.length} icon={Armchair} badge="OPÉ" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-10 flex justify-between items-center border-b border-slate-50">
-            <h3 className="text-xs font-black uppercase italic tracking-widest text-slate-500 flex items-center gap-3">
-              <Activity className="w-4 h-4" /> Flux de Stock Récents
-            </h3>
-            <button onClick={() => setActiveView('history')} className="text-[8px] font-black uppercase underline tracking-widest text-slate-900">Journal Complet</button>
+        <div className="lg:col-span-2 space-y-10">
+          <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-10 flex justify-between items-center border-b border-slate-50">
+              <h3 className="text-xs font-black uppercase italic tracking-widest text-slate-500 flex items-center gap-3">
+                <BarChartIcon className="w-4 h-4" /> Répartition par Catégorie (Fc)
+              </h3>
+            </div>
+            <div className="p-10 h-[300px]">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="label" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} width={100} />
+                    <Tooltip 
+                      cursor={{ fill: '#f8fafc' }}
+                      contentStyle={{ backgroundColor: '#fff', borderRadius: '15px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}
+                      itemStyle={{ fontWeight: 900, color: '#143d21' }}
+                      formatter={(value: number) => [`${value.toLocaleString()} Fc`, 'Valeur']}
+                    />
+                    <Bar dataKey="valeur" radius={[0, 8, 8, 0]}>
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#143d21' : '#10b981'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center opacity-30">
+                  <PieChartIcon className="w-12 h-12 mb-4" />
+                  <p className="text-[10px] font-black uppercase italic">Aucune donnée statistique</p>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto max-h-[500px] p-6 space-y-2">
-            {history.slice(-10).reverse().map((log: any) => (
-              <div key={log.id} className="flex items-center justify-between p-6 bg-slate-50/50 rounded-2xl group hover:bg-slate-50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${log.changeAmount > 0 ? 'bg-emerald-50 text-emerald-500' : 'bg-slate-200 text-slate-500'}`}>
-                    {log.changeAmount > 0 ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+
+          <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-10 flex justify-between items-center border-b border-slate-50">
+              <h3 className="text-xs font-black uppercase italic tracking-widest text-slate-500 flex items-center gap-3">
+                <Activity className="w-4 h-4" /> Flux de Stock Récents
+              </h3>
+              <button onClick={() => setActiveView('history')} className="text-[8px] font-black uppercase underline tracking-widest text-slate-900">Journal Complet</button>
+            </div>
+            <div className="flex-1 overflow-y-auto max-h-[400px] p-6 space-y-2">
+              {history.slice(-10).reverse().map((log: any) => (
+                <div key={log.id} className="flex items-center justify-between p-6 bg-slate-50/50 rounded-2xl group hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${log.changeAmount > 0 ? 'bg-emerald-50 text-emerald-500' : 'bg-slate-200 text-slate-500'}`}>
+                      {log.changeAmount > 0 ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <h5 className="text-[11px] font-black uppercase text-slate-900">{log.productName}</h5>
+                      <p className="text-[8px] font-bold text-slate-500 uppercase tabular-nums">{new Date(log.date).toLocaleTimeString('fr-FR')}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h5 className="text-[11px] font-black uppercase text-slate-900">{log.productName}</h5>
-                    <p className="text-[8px] font-bold text-slate-500 uppercase tabular-nums">{new Date(log.date).toLocaleTimeString('fr-FR')}</p>
+                  <div className={`text-sm font-black italic ${log.changeAmount > 0 ? 'text-emerald-500' : 'text-slate-900'}`}>
+                    {log.changeAmount > 0 ? `+${log.changeAmount}` : log.changeAmount}
                   </div>
                 </div>
-                <div className={`text-sm font-black italic ${log.changeAmount > 0 ? 'text-emerald-500' : 'text-slate-900'}`}>
-                  {log.changeAmount > 0 ? `+${log.changeAmount}` : log.changeAmount}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
@@ -130,13 +193,31 @@ const DashboardView = ({ products, furniture, history, setActiveView, exchangeRa
   );
 };
 
-const StatCard = ({ label, value, icon: Icon, alert, badge }: any) => (
-  <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
-    <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-6 ${alert ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-400'}`}><Icon className="w-5 h-5" /></div>
-    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{label}</p>
-    <div className="flex justify-between items-end">
-      <h4 className={`text-3xl font-black italic tracking-tighter leading-none ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h4>
-      {badge && <span className="text-[8px] font-black px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">{badge}</span>}
+const StatCard = ({ label, value, subValue, icon: Icon, alert, badge }: any) => (
+  <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+    <div>
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-6 ${alert ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-400'}`}><Icon className="w-5 h-5" /></div>
+      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{label}</p>
+    </div>
+    <div>
+      <div className="flex justify-between items-end">
+        <h4 className={`text-3xl font-black italic tracking-tighter leading-none ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h4>
+        {badge && <span className="text-[8px] font-black px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">{badge}</span>}
+      </div>
+      {subValue && <p className="text-[11px] font-bold text-emerald-600 mt-2 uppercase italic tracking-tighter tabular-nums">{subValue}</p>}
+    </div>
+  </div>
+);
+
+// Fix for missing InventoryStat component
+const InventoryStat = ({ label, value, icon: Icon, alert }: any) => (
+  <div className={`bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-6 ${alert ? 'bg-rose-50/30' : ''}`}>
+    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${alert ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
+      <Icon className="w-6 h-6" />
+    </div>
+    <div>
+      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{label}</p>
+      <h4 className={`text-xl font-black italic tracking-tighter tabular-nums ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h4>
     </div>
   </div>
 );
@@ -501,12 +582,6 @@ const ReportingView = ({ products, history, exchangeRate }: { products: Product[
   );
 };
 
-const RefreshCcw = ({ className }: any) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
-  </svg>
-);
-
 const HistoryView = ({ history, searchTerm, setSearchTerm, handleExport }: any) => {
   const [period, setPeriod] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'ALL'>('ALL');
 
@@ -634,98 +709,6 @@ const HistoryView = ({ history, searchTerm, setSearchTerm, handleExport }: any) 
   );
 };
 
-const InventoryStat = ({ label, value, icon: Icon, alert }: any) => (
-  <div className="bg-white px-8 py-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6">
-    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${alert ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-500'}`}><Icon className="w-5 h-5" /></div>
-    <div>
-      <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">{label}</p>
-      <h5 className={`text-xl font-black italic leading-none tabular-nums ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h5>
-    </div>
-  </div>
-);
-
-// --- Furniture View ---
-const FurnitureView = ({ furniture, searchTerm, setSearchTerm, setIsEditModalOpen, setEditingFurniture }: any) => {
-  const filtered = useMemo(() => {
-    return furniture.filter((f: any) => 
-      f.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (f.code || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [furniture, searchTerm]);
-
-  const totalValue = filtered.reduce((acc: number, f: any) => acc + (f.purchasePrice || 0), 0);
-
-  return (
-    <div className="space-y-10 animate-fade-in">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <InventoryStat label="Actifs Recensés" value={filtered.length} icon={Armchair} />
-        <InventoryStat label="Valeur Patrimoniale" value={`${totalValue.toLocaleString()} Fc`} icon={Database} />
-        <InventoryStat label="États Critiques" value={filtered.filter((f: any) => f.condition === 'Endommagé' || f.condition === 'Usé').length} icon={AlertTriangle} alert={filtered.some((f: any) => f.condition === 'Endommagé')} />
-      </div>
-
-      <div className="flex flex-col xl:flex-row gap-6 bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm no-print">
-        <div className="relative flex-1 group">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-[#143d21] transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Désignation ou code inventaire..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-14 pr-6 py-5 bg-slate-50 border-none rounded-[1.5rem] text-xs font-black uppercase tracking-widest outline-none ring-offset-0 focus:ring-2 ring-[#143d21]/10 transition-all text-slate-900"
-          />
-        </div>
-        <button 
-          onClick={() => { setEditingFurniture(null); setIsEditModalOpen(true); }}
-          className="px-10 py-5 bg-[#143d21] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 hover:scale-[1.02] transition-all"
-        >
-          <Plus className="w-5 h-5" /> Nouvel Actif
-        </button>
-      </div>
-
-      <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
-              <th className="px-10 py-8">Code & Désignation</th>
-              <th className="px-8 py-8">Affectation</th>
-              <th className="px-8 py-8">Condition</th>
-              <th className="px-10 py-8 text-right">Valeur d'Acquisition</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-10 py-32 text-center text-slate-400">
-                  <Armchair className="w-16 h-16 mx-auto mb-6 opacity-20" />
-                  <p className="text-[10px] font-black uppercase tracking-widest italic">Aucun actif enregistré</p>
-                </td>
-              </tr>
-            ) : (
-              filtered.map((f: any) => (
-                <tr key={f.id} className="group hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => { setEditingFurniture(f); setIsEditModalOpen(true); }}>
-                  <td className="px-10 py-8">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">{f.code}</p>
-                    <h5 className="text-[11px] font-black uppercase italic text-slate-900">{f.name}</h5>
-                  </td>
-                  <td className="px-8 py-8">
-                    <p className="text-[10px] font-black text-slate-900 uppercase">{f.assignedTo || 'Non affecté'}</p>
-                  </td>
-                  <td className="px-8 py-8">
-                    <Badge status={(f.condition || 'BON').toUpperCase()} />
-                  </td>
-                  <td className="px-10 py-8 text-right font-black italic text-slate-900">
-                    {(f.purchasePrice || 0).toLocaleString()} Fc
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
 const ImportView = ({ onImportSuccess, showToast }: any) => {
   const [inputText, setInputText] = useState("");
   const [previewItems, setPreviewItems] = useState<any[]>([]);
@@ -821,6 +804,76 @@ const ImportView = ({ onImportSuccess, showToast }: any) => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/**
+ * Vue de gestion du patrimoine mobilier et des actifs immobilisés.
+ * Fix for missing FurnitureView component.
+ */
+const FurnitureView = ({ furniture, searchTerm, setSearchTerm, setIsEditModalOpen, setEditingFurniture }: any) => {
+  const filtered = furniture.filter((f: any) => 
+    f.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    f.code.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-10 animate-fade-in">
+      <div className="flex flex-col xl:flex-row gap-6 bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm no-print">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-[#143d21] transition-colors" />
+          <input 
+            type="text" 
+            placeholder="Chercher nom, code, affectation..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-14 pr-6 py-5 bg-slate-50 border-none rounded-[1.5rem] text-xs font-black uppercase tracking-widest outline-none ring-offset-0 focus:ring-2 ring-[#143d21]/10 transition-all text-slate-900"
+          />
+        </div>
+        <button 
+          onClick={() => { setEditingFurniture(null); setIsEditModalOpen(true); }}
+          className="px-10 py-5 bg-[#143d21] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 hover:scale-[1.02] transition-all"
+        >
+          <Plus className="w-5 h-5" /> Nouvel Actif
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+        {filtered.length === 0 ? (
+          <div className="col-span-full py-32 text-center opacity-30">
+            <Armchair className="w-20 h-20 mx-auto mb-6" />
+            <p className="text-[11px] font-black uppercase italic tracking-widest">Aucun actif mobilier répertorié</p>
+          </div>
+        ) : (
+          filtered.map((f: any) => (
+            <div key={f.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm group hover:border-[#143d21] transition-all cursor-pointer" onClick={() => { setEditingFurniture(f); setIsEditModalOpen(true); }}>
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-[#143d21] group-hover:text-white transition-all">
+                  <Armchair className="w-6 h-6" />
+                </div>
+                <Badge status={f.condition.toUpperCase()} />
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">{f.code}</p>
+                  <h5 className="text-xl font-black italic uppercase text-slate-900 leading-none">{f.name}</h5>
+                </div>
+                <div className="pt-4 border-t border-slate-50 flex justify-between items-end">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Affecté à</p>
+                    <p className="text-[11px] font-bold text-slate-900 uppercase italic">{f.assignedTo || 'Non assigné'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Valeur d'achat</p>
+                    <p className="text-[13px] font-black text-[#143d21] tabular-nums">{(f.purchasePrice || 0).toLocaleString()} Fc</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };
