@@ -7,7 +7,8 @@ import { Badge } from './Badge';
 interface TasksViewProps {
   tasks: Task[];
   setTasks: (t: Task[]) => void;
-  notify: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  // Fix: Added 'warning' to the notify type signature
+  notify: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 export const TasksView = ({ tasks, setTasks, notify }: TasksViewProps) => {

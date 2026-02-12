@@ -14,7 +14,8 @@ interface AuditViewProps {
   sites: Site[];
   exchangeRate: number;
   onUpdateStock: (prodId: string, amount: number, reason: string, type: 'adjustment') => void;
-  notify: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  // Fix: Added 'warning' to the notify type signature
+  notify: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 export const AuditView = ({ products, sites, exchangeRate, onUpdateStock, notify }: AuditViewProps) => {

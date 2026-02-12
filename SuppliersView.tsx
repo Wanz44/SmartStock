@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { 
   Truck, Plus, Search, Edit3, Trash2, Mail, 
@@ -11,7 +12,8 @@ import { Badge } from './Badge';
 interface SuppliersViewProps {
   suppliers: Supplier[];
   setSuppliers: (s: Supplier[]) => void;
-  notify: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  // Fix: Added 'warning' to the notify type signature
+  notify: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 export const SuppliersView = ({ suppliers, setSuppliers, notify }: SuppliersViewProps) => {
