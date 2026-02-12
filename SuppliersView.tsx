@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
   Truck, Plus, Search, Edit3, Trash2, Mail, 
@@ -111,7 +110,8 @@ export const SuppliersView = ({ suppliers, setSuppliers, notify }: SuppliersView
           </div>
           <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
              <div className="flex justify-between items-start mb-4">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Élite (Note > 4.5)</p>
+                {/* CORRECTION ICI : utilisation de &gt; au lieu de > */}
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Élite (Note &gt; 4.5)</p>
                 <BadgeCheck className="w-5 h-5 text-emerald-500" />
              </div>
              <h4 className="text-3xl font-black italic tracking-tighter text-emerald-600">{stats.topRated}</h4>
