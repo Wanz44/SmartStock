@@ -2,11 +2,10 @@
 import { Product, InventoryLog } from "../types";
 
 /**
- * Service d'analyse automatique des données d'inventaire.
- * Génère des diagnostics et recommandations basés sur des calculs réels.
+ * Service d'analyse algorithmique déterministe (Simulant une logique Python Pro).
+ * Génère des diagnostics basés sur des calculs de moyenne et corrélation.
  */
 export const getAutomatedAnalysis = async (products: Product[], history: InventoryLog[]) => {
-  // Simuler un délai de traitement réaliste
   await new Promise(resolve => setTimeout(resolve, 600));
   
   const totalProducts = products.length;
@@ -58,67 +57,58 @@ export const getAutomatedAnalysis = async (products: Product[], history: Invento
     .map(([name]) => name);
   
   if (totalProducts === 0) {
-    return "📊 AUCUNE DONNÉE - L'inventaire est vide. Commencez par créer des sites et ajouter des produits.";
+    return "[STATUS_ERROR]: L'inventaire est vide. Enregistrez des données pour lancer le moteur.";
   }
   
   let analysis = "";
-  analysis += `🔍 ANALYSE AUTOMATIQUE DU PATRIMOINE\n`;
+  analysis += `[EXECUTION_LOG]: SMARTSTOCK_CALC_ENGINE v2.5\n`;
+  analysis += `[TIMESTAMP]: ${new Date().toISOString()}\n`;
   analysis += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-  analysis += `📦 INVENTAIRE : ${totalProducts} produits actifs\n`;
-  analysis += `💰 VALORISATION : ${(totalStockValue / 1000000).toFixed(1)}M Fc\n\n`;
+  analysis += `[DATA_SUMMARY]:\n`;
+  analysis += `   • RÉFÉRENCES ACTIVES : ${totalProducts} SKU\n`;
+  analysis += `   • VALORISATION RÉSEAU : ${(totalStockValue / 1000000).toFixed(1)}M Fc\n\n`;
   
-  analysis += `⚠️  DIAGNOSTIC DES RISQUES\n`;
+  analysis += `[RISK_DIAGNOSTIC]:\n`;
   if (outOfStock.length > 0) {
-    analysis += `   • RUPTURE TOTALE : ${outOfStock.length} article(s) en stock zéro\n`;
+    analysis += `   • RUPTURES_DÉTECTÉES : ${outOfStock.length} article(s) à stock nul\n`;
   }
   if (lowStock.length > 0) {
-    analysis += `   • SEUIL CRITIQUE : ${lowStock.length} article(s) sous le minimum\n`;
+    analysis += `   • SEUILS_CRITIQUES : ${lowStock.length} article(s) à réapprovisionner\n`;
   }
   if (criticalRate > 30) {
-    analysis += `   • ALERTE : ${criticalRate}% des articles sont sous seuil critique\n`;
-  }
-  if (outOfStock.length === 0 && lowStock.length === 0) {
-    analysis += `   • AUCUN RISQUE DÉTECTÉ - Tous les stocks sont conformes\n`;
+    analysis += `   • ALERT_LEVEL : CRITIQUE (${criticalRate}% du stock en péril)\n`;
+  } else {
+    analysis += `   • ALERT_LEVEL : STABLE (${criticalRate}% sous seuil)\n`;
   }
   analysis += `\n`;
   
-  analysis += `📈 TENDANCES DE CONSOMMATION (30j)\n`;
-  analysis += `   • ENTRÉES : +${entryVolume} unités\n`;
-  analysis += `   • SORTIES : -${exitVolume} unités\n`;
-  analysis += `   • AJUSTEMENTS : ${adjustmentVolume} unités\n`;
-  analysis += `   • RATIO E/S : ${turnoverRatio}\n`;
+  analysis += `[FLOW_CORRELATION_30D]:\n`;
+  analysis += `   • VOL_ENTRÉES : +${entryVolume} unit.\n`;
+  analysis += `   • VOL_SORTIES : -${exitVolume} unit.\n`;
+  analysis += `   • RATIO_RENOUVELLEMENT : ${turnoverRatio}\n`;
   
   if (topProducts.length > 0) {
-    analysis += `   • PRODUITS ACTIFS : ${topProducts.join(', ')}\n`;
+    analysis += `   • HOT_ZONE_PRODUCTS : ${topProducts.join(' | ')}\n`;
   }
   analysis += `\n`;
   
-  analysis += `💡 STRATÉGIE DE RÉAPPROVISIONNEMENT\n`;
+  analysis += `[STRATEGIC_ACTIONS]:\n`;
   
   if (outOfStock.length > 0) {
-    analysis += `   • PRIORITÉ 1 : Réapprovisionner immédiatement ${outOfStock.length} article(s) en rupture\n`;
-  }
-  if (lowStock.length > 0) {
-    analysis += `   • PRIORITÉ 2 : Commander ${lowStock.length} article(s) sous seuil critique\n`;
+    analysis += `   • ACTION_REQUIRED : Injection immédiate de stock pour ${outOfStock.length} SKU\n`;
   }
   
   if (exitVolume > entryVolume) {
-    analysis += `   • ALERTE FLUX : Sorties > Entrées - Risque de déstockage accéléré\n`;
-    analysis += `   • ACTION : Augmenter les approvisionnements\n`;
-  } else if (entryVolume > exitVolume * 1.2) {
-    analysis += `   • SURSTOCKAGE : Entrées très supérieures aux sorties\n`;
-    analysis += `   • ACTION : Vérifier la rotation et ajuster les commandes\n`;
+    analysis += `   • FLOW_WARNING : Taux de sortie excédentaire. Augmenter le budget appro.\n`;
+  } else if (entryVolume > exitVolume * 1.5) {
+    analysis += `   • OPTIMIZATION_HINT : Risque de surstockage. Réduire les cadences d'achat.\n`;
   }
   
-  if (adjustmentVolume > entryVolume * 0.1) {
-    analysis += `   • ÉCARTS D'AUDIT : Volume d'ajustements anormal\n`;
-    analysis += `   • ACTION : Programmer un inventaire physique ciblé\n`;
+  if (adjustmentVolume > entryVolume * 0.15) {
+    analysis += `   • SECURITY_AUDIT : Volume d'écarts anormal détecté (>15% flux). Vérifier la chaîne de garde.\n`;
   }
   
-  if (outOfStock.length === 0 && lowStock.length === 0 && entryVolume >= exitVolume) {
-    analysis += `   • SITUATION OPTIMALE : Maintenir le rythme actuel\n`;
-    analysis += `   • PROCHAINE ÉCHÉANCE : Audit trimestriel dans ${getDaysUntilNextQuarter()} jours\n`;
-  }
+  analysis += `\n[ENGINE_STATUS]: Terminé avec succès.`;
   
   return analysis;
 };

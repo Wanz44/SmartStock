@@ -1,9 +1,9 @@
 
 import React from 'react';
 import { 
-  Zap, RefreshCw, AlertTriangle, TrendingUp, 
+  Cpu, RefreshCw, AlertTriangle, TrendingUp, 
   TrendingDown, PieChart as PieIcon, MapPin, Calendar, 
-  Activity, CheckCircle2, AlertCircle
+  Activity, CheckCircle2, AlertCircle, Terminal, Code
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { Product, InventoryLog, RapportAutomatique, Site } from './types';
@@ -37,39 +37,44 @@ export const AnalyticsView = ({
     <div className="flex flex-col items-center justify-center py-32 gap-6 animate-pulse">
       <div className="relative">
         <RefreshCw className="w-16 h-16 text-emerald-500 animate-spin" />
-        <Activity className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-emerald-600" />
+        <Cpu className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-emerald-600" />
       </div>
       <div className="text-center">
-        <p className="text-[14px] font-black uppercase italic text-slate-900">Moteur d'analyse automatisée en cours...</p>
-        <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Exécution du script de traitement des métriques et audits financiers</p>
+        <p className="text-[14px] font-black uppercase italic text-slate-900">Exécution des fonctions déterministes...</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Traitement des métriques logistiques (JS Logic Controller v2.5)</p>
       </div>
     </div>
   );
 
   return (
     <div className="space-y-12 animate-fade-in pb-32">
-      <div className="flex justify-end no-print">
+      <div className="flex justify-between items-center no-print">
+        <div className="flex items-center gap-3 bg-slate-900 text-emerald-400 px-6 py-3 rounded-2xl border border-white/10">
+           <Terminal className="w-4 h-4" />
+           <span className="text-[10px] font-bold uppercase tracking-widest">Calculated_Logistics_Engine.exec()</span>
+        </div>
         <button 
           onClick={onRefresh}
           className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-100 rounded-xl text-[9px] font-black uppercase text-[#1a3a22] hover:bg-slate-50 transition-all shadow-sm"
         >
           <RefreshCw className="w-3.5 h-3.5" /> 
-          Rafraîchir l'analyse
+          Relancer les Scripts
         </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-7 bg-white p-10 rounded-[4rem] border border-slate-100 shadow-xl space-y-8">
+        <div className="lg:col-span-7 bg-white p-10 rounded-[4rem] border border-slate-100 shadow-xl space-y-8 overflow-hidden">
           <div className="flex justify-between items-center">
             <h3 className="text-2xl font-header italic uppercase flex items-center gap-3">
-              <Zap className="w-6 h-6 text-emerald-500" /> Audit Logistique Automatisé
+              <Code className="w-6 h-6 text-emerald-600" /> Diagnostic Algorithmique
             </h3>
-            <Badge variant="info">Traitement temps réel</Badge>
+            <Badge variant="info">Pure Logic (Offline)</Badge>
           </div>
-          <div className="bg-slate-50 p-8 rounded-[3rem] border-l-[6px] border-emerald-500 relative">
-             <p className="text-[14px] font-bold text-slate-700 leading-relaxed whitespace-pre-wrap italic">
-               "{analysis || "Analyse en attente..."}"
-             </p>
+          <div className="bg-slate-900 p-8 rounded-[3rem] border border-emerald-500/30 relative">
+             <div className="absolute top-6 right-8 text-emerald-500/20"><Cpu className="w-20 h-20" /></div>
+             <pre className="text-[13px] font-bold text-emerald-400/90 leading-relaxed whitespace-pre-wrap italic font-mono">
+               {analysis || "Erreur lors de la lecture du script..."}
+             </pre>
           </div>
         </div>
 
@@ -77,8 +82,8 @@ export const AnalyticsView = ({
            <div className={`p-8 rounded-[3rem] shadow-2xl text-white transition-all ${report.balanceAnalysis.isPositive ? 'bg-[#1a3a22]' : 'bg-rose-900'}`}>
               <div className="flex justify-between items-start mb-6">
                  <div>
-                    <h3 className="text-xl font-header italic uppercase">Bilan des Flux (30J)</h3>
-                    <p className="text-[10px] font-bold opacity-60 uppercase mt-1">Comparaison Entrées vs Sorties</p>
+                    <h3 className="text-xl font-header italic uppercase">Balance de Flux (30J)</h3>
+                    <p className="text-[10px] font-bold opacity-60 uppercase mt-1">Équation : Σ Entrées / Σ Sorties</p>
                  </div>
                  {report.balanceAnalysis.isPositive ? <TrendingUp className="w-10 h-10 text-emerald-400" /> : <TrendingDown className="w-10 h-10 text-rose-400" />}
               </div>
@@ -88,9 +93,9 @@ export const AnalyticsView = ({
                     <p className="text-[9px] font-black uppercase tracking-widest mt-1 italic">{report.balanceAnalysis.message}</p>
                  </div>
                  <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">Statut Financier</p>
+                    <p className="text-[9px] font-bold opacity-40 uppercase">Statut Fonctionnel</p>
                     <Badge variant={report.balanceAnalysis.isPositive ? 'success' : 'danger'}>
-                       {report.balanceAnalysis.isPositive ? 'Excédentaire' : 'Déficitaire'}
+                       {report.balanceAnalysis.isPositive ? 'Ratio Optimal' : 'Flux Déficitaire'}
                     </Badge>
                  </div>
               </div>
@@ -98,7 +103,7 @@ export const AnalyticsView = ({
 
            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex-1">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                 <AlertCircle className="w-4 h-4" /> Indicateurs Santé Sites
+                 <AlertCircle className="w-4 h-4" /> Indices de Fiabilité Site
               </h4>
               <div className="space-y-4">
                  {report.healthIndicators.map((ind, i) => (
@@ -118,7 +123,7 @@ export const AnalyticsView = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         <div className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-sm">
            <h3 className="text-xl font-header italic uppercase mb-10 flex items-center gap-3">
-              <Calendar className="w-5 h-5 text-blue-500" /> Dépenses par Mois (Fc)
+              <Calendar className="w-5 h-5 text-blue-500" /> Matrice des Dépenses (Fc)
            </h3>
            <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -135,7 +140,7 @@ export const AnalyticsView = ({
 
         <div className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-sm">
            <h3 className="text-xl font-header italic uppercase mb-10 flex items-center gap-3">
-              <MapPin className="w-5 h-5 text-emerald-500" /> Valeur Stock par Site
+              <MapPin className="w-5 h-5 text-emerald-500" /> Répartition Valeur par Site
            </h3>
            <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -152,7 +157,7 @@ export const AnalyticsView = ({
 
         <div className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-sm">
            <h3 className="text-xl font-header italic uppercase mb-10 flex items-center gap-3">
-              <TrendingUp className="w-5 h-5 text-orange-500" /> Top 5 Consommation (Volume)
+              <TrendingUp className="w-5 h-5 text-orange-500" /> Corrélation Consommation (TOP 5)
            </h3>
            <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -172,7 +177,7 @@ export const AnalyticsView = ({
 
         <div className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-sm">
            <h3 className="text-xl font-header italic uppercase mb-10 flex items-center gap-3">
-              <PieIcon className="w-5 h-5 text-indigo-500" /> Part des Dépenses par Site
+              <PieIcon className="w-5 h-5 text-indigo-500" /> Répartition du Budget Consommé
            </h3>
            <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -202,7 +207,7 @@ export const AnalyticsView = ({
 
       <div className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-sm grid grid-cols-1 lg:grid-cols-3 gap-10">
          <div className="lg:col-span-1 space-y-6">
-            <h4 className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400">Rapport de Script</h4>
+            <h4 className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400">Recommandations Métiers</h4>
             <div className="space-y-4">
                {report.recommendations.map((rec, i) => (
                   <div key={i} className="flex gap-4 items-start bg-slate-50 p-4 rounded-2xl">
@@ -214,7 +219,7 @@ export const AnalyticsView = ({
          </div>
          
          <div className="lg:col-span-2 space-y-6">
-            <h4 className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400">Alertes Systèmes</h4>
+            <h4 className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400">Alertes Logistiques Critiques</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                {report.criticalAlerts.slice(0, 6).map((alert, i) => (
                   <div key={i} className="bg-rose-50 p-4 rounded-2xl flex items-center gap-4 border border-rose-100">
@@ -225,7 +230,7 @@ export const AnalyticsView = ({
                {report.criticalAlerts.length === 0 && (
                   <div className="col-span-full py-8 text-center bg-emerald-50 rounded-3xl border border-emerald-100">
                      <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                     <p className="text-[11px] font-black uppercase text-emerald-900">Aucune anomalie détectée par le script</p>
+                     <p className="text-[11px] font-black uppercase text-emerald-900">Script : Conformité Intégrale Détectée</p>
                   </div>
                )}
             </div>

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Box, History as HistoryIcon, Activity, LogOut, 
   Settings, CheckSquare, FileBarChart, X,
   MapPin, Lamp, Truck, Database,
-  Plus, Save, Trash2, ShoppingCart, Edit3, RotateCcw
+  Plus, Save, Trash2, ShoppingCart, Edit3, RotateCcw, Cpu
 } from 'lucide-react';
 import { 
   Product, InventoryLog, ViewType, Task, AppSettings, NeedReport, 
@@ -72,7 +72,7 @@ const getViewTitle = (view: ViewType): string => {
     case 'traceability': return 'Historique';
     case 'tasks': return 'Agenda Tâches';
     case 'needs_list': return 'État de Besoins';
-    case 'analytics': return 'Analyses IA';
+    case 'analytics': return 'Moteur Algorithmique';
     case 'trash': return 'Corbeille Archive';
     case 'settings': return 'Paramètres';
     case 'movements': return 'Mouvements Stock';
@@ -125,6 +125,8 @@ export default function App() {
   const [sites, setSites] = useState<Site[]>(getStored('ss_sites', []));
   const [suppliers, setSuppliers] = useState<Supplier[]>(getStored('ss_suppliers', []));
   
+  const [logisticsBalance, setLogisticsBalance] = useState<number>(getStored('ss_logistics_balance', 0));
+  
   const [autoReport, setAutoReport] = useState<RapportAutomatique | null>(null);
   const [autoAnalysis, setAutoAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -147,11 +149,44 @@ export default function App() {
     setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
   };
 
+  const handleHardReset = () => {
+    if (confirm("⚠️ ALERTE CRITIQUE : Cette action va effacer TOUS les stocks, l'historique, les sites et remettre le solde à zéro. Confirmer la purge ?")) {
+      localStorage.clear();
+      window.location.reload();
+    }
+  };
+
+  const runAutomatedAnalysis = async () => {
+    setIsAnalyzing(true);
+    try {
+      const report = await getAutomatedReport(products, history, settings.exchangeRate, sites);
+      const analysis = await getAutomatedAnalysis(products, history);
+      setAutoReport(report);
+      setAutoAnalysis(analysis);
+    } catch (err) {
+      notify("Échec de l'exécution du script d'analyse", "error");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeView === 'analytics' && !autoReport && !isAnalyzing) {
+      runAutomatedAnalysis();
+    }
+  }, [activeView, autoReport, isAnalyzing, products, history, sites, settings.exchangeRate]);
+
   const handleTransaction = (prodId: string, amount: number, reason: string, type: 'entry' | 'exit' | 'adjustment' | 'transfer' = 'adjustment') => {
     const product = products.find(p => p.id === prodId);
     if (!product) return;
     const finalStock = product.currentStock + amount;
     if (finalStock < 0) return notify(`Stock insuffisant pour ${product.name}`, "error");
+
+    if (type === 'entry') {
+      const priceFc = product.currency === '$' ? product.unitPrice * settings.exchangeRate : product.unitPrice;
+      const totalCost = Math.abs(amount) * priceFc;
+      setLogisticsBalance(prev => prev - totalCost);
+    }
 
     setProducts(products.map(p => p.id === prodId ? { ...p, currentStock: finalStock, lastInventoryDate: new Date().toISOString() } : p));
     
@@ -163,63 +198,50 @@ export default function App() {
     setHistory([newLog, ...history]);
   };
 
-  const handleAddProduct = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (sites.length === 0) return notify("Créez un site d'abord", "error");
-    const id = newProductData.id || `RÉF-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-    const product: Product = {
-      id, name: newProductData.name.toUpperCase(), category: newProductData.category, 
-      currentStock: Number(newProductData.initialStock), minStock: Number(newProductData.minStock), 
-      monthlyNeed: Number(newProductData.monthlyNeed) || 20, unit: newProductData.unit, 
-      unitPrice: Number(newProductData.unitPrice), currency: newProductData.currency,
-      siteId: newProductData.siteId || sites[0].id, lastInventoryDate: new Date().toISOString()
+  const handleImportProducts = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n').filter(l => l.trim() !== '');
+      if (lines.length <= 1) return notify("Fichier CSV vide ou invalide", "error");
+      
+      const newProducts = [...products];
+      const newSites = [...sites];
+      let importCount = 0;
+
+      lines.slice(1).forEach(line => {
+        const parts = line.split(/[;,]/).map(p => p.trim());
+        if (parts.length >= 2) {
+          const name = parts[0].toUpperCase();
+          const category = parts[1] || 'Alimentaire';
+          const stock = parseInt(parts[2]) || 0;
+          const minStock = parseInt(parts[3]) || 5;
+          const unit = parts[4] || 'PIÈCE';
+          const price = parseFloat(parts[5]) || 0;
+          const siteName = parts[6] || 'MAGASIN CENTRAL';
+
+          let siteObj = newSites.find(s => s.name.toUpperCase() === siteName.toUpperCase());
+          if (!siteObj) {
+            siteObj = { id: `S-${Date.now()}-${Math.random().toString(36).substr(2,3)}`.toUpperCase(), name: siteName, location: 'Local', capacity: 2000, status: 'Opérationnel', manager: 'Admin' };
+            newSites.push(siteObj);
+          }
+
+          const id = `PRD-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+          newProducts.push({
+            id, name, category, currentStock: stock, minStock, monthlyNeed: minStock * 2,
+            unit, unitPrice: price, currency: 'Fc', siteId: siteObj.id, lastInventoryDate: new Date().toISOString()
+          });
+          importCount++;
+        }
+      });
+      setSites(newSites);
+      setProducts(newProducts);
+      notify(`${importCount} produits importés par lot.`);
     };
-    setProducts([product, ...products]);
-    if (product.currentStock > 0) handleTransaction(id, product.currentStock, 'Initialisation', 'entry');
-    setIsAddModalOpen(false);
-    setNewProductData({ id: '', name: '', category: 'Alimentaire', unitPrice: 0, currency: 'Fc', minStock: 10, unit: 'PIÈCE', initialStock: 0, siteId: '', monthlyNeed: 20 });
-    notify(`Produit "${product.name}" ajouté.`);
-  };
-
-  const handleMoveProductToTrash = (id: string) => {
-    const prod = products.find(p => p.id === id);
-    if (!prod) return;
-    setDeletedProducts([...deletedProducts, prod]);
-    setProducts(products.filter(p => p.id !== id));
-    notify(`"${prod.name}" déplacé vers la corbeille.`);
-  };
-
-  const handleRestoreProduct = (id: string) => {
-    const prod = deletedProducts.find(p => p.id === id);
-    if (!prod) return;
-    const siteExists = sites.find(s => s.id === prod.siteId);
-    const finalProd = siteExists ? prod : { ...prod, siteId: sites[0]?.id || 'SITE-01' };
-    setProducts([...products, finalProd]);
-    setDeletedProducts(deletedProducts.filter(p => p.id !== id));
-    notify(`"${prod.name}" restauré avec succès.`);
-  };
-
-  const handlePermanentDeleteProduct = (id: string) => {
-    setDeletedProducts(deletedProducts.filter(p => p.id !== id));
-    notify("Produit définitivement supprimé.", "error");
-  };
-
-  const handleMoveFurnitureToTrash = (id: string) => {
-    const item = furniture.find(f => f.id === id);
-    if (!item) return;
-    setDeletedFurniture([...deletedFurniture, item]);
-    setFurniture(furniture.filter(f => f.id !== id));
-    notify(`"${item.name}" déplacé vers la corbeille.`);
-  };
-
-  const handleRestoreFurniture = (id: string) => {
-    const item = deletedFurniture.find(f => f.id === id);
-    if (!item) return;
-    const siteExists = sites.find(s => s.id === item.siteId);
-    const finalItem = siteExists ? item : { ...item, siteId: sites[0]?.id || 'SITE-01' };
-    setFurniture([...furniture, finalItem]);
-    setDeletedFurniture(deletedFurniture.filter(f => f.id !== id));
-    notify(`"${item.name}" restauré avec succès.`);
+    reader.readAsText(file);
+    if (e.target) e.target.value = '';
   };
 
   const handleImportFurniture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -277,20 +299,28 @@ export default function App() {
       'ss_suppliers': suppliers,
       'ss_furniture_audits': furnitureAudits,
       'ss_needs_history': needsHistory,
+      'ss_logistics_balance': logisticsBalance,
       'isLoggedIn': isLoggedIn
     };
     Object.entries(storageKeys).forEach(([key, val]) => localStorage.setItem(key, JSON.stringify(val)));
-  }, [products, deletedProducts, furniture, deletedFurniture, history, tasks, isLoggedIn, settings, sites, suppliers, furnitureAudits, needsHistory]);
+  }, [products, deletedProducts, furniture, deletedFurniture, history, tasks, isLoggedIn, settings, sites, suppliers, furnitureAudits, needsHistory, logisticsBalance]);
 
-  const runAutomatedAnalysis = async () => {
-    if (products.length === 0) return;
-    setIsAnalyzing(true);
-    try {
-      const report = await getAutomatedReport(products, history, settings.exchangeRate, sites);
-      const analysis = await getAutomatedAnalysis(products, history);
-      setAutoReport(report);
-      setAutoAnalysis(analysis);
-    } finally { setIsAnalyzing(false); }
+  const handleAddProduct = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (sites.length === 0) return notify("Créez un site d'abord", "error");
+    const id = newProductData.id || `RÉF-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const product: Product = {
+      id, name: newProductData.name.toUpperCase(), category: newProductData.category, 
+      currentStock: Number(newProductData.initialStock), minStock: Number(newProductData.minStock), 
+      monthlyNeed: Number(newProductData.monthlyNeed) || 20, unit: newProductData.unit, 
+      unitPrice: Number(newProductData.unitPrice), currency: newProductData.currency,
+      siteId: newProductData.siteId || sites[0].id, lastInventoryDate: new Date().toISOString()
+    };
+    setProducts([product, ...products]);
+    if (product.currentStock > 0) handleTransaction(id, product.currentStock, 'Initialisation', 'entry');
+    setIsAddModalOpen(false);
+    setNewProductData({ id: '', name: '', category: 'Alimentaire', unitPrice: 0, currency: 'Fc', minStock: 10, unit: 'PIÈCE', initialStock: 0, siteId: '', monthlyNeed: 20 });
+    notify(`Produit "${product.name}" ajouté.`);
   };
 
   if (isFirstLaunch) return (
@@ -322,7 +352,7 @@ export default function App() {
           <NavItem active={activeView === 'traceability'} onClick={() => setActiveView('traceability')} icon={HistoryIcon} label="Historique" />
           <NavItem active={activeView === 'tasks'} onClick={() => setActiveView('tasks')} icon={CheckSquare} label="Agenda" alertCount={tasks.filter(t => t.status === 'En attente').length} />
           <NavItem active={activeView === 'needs_list'} onClick={() => setActiveView('needs_list')} icon={ShoppingCart} label="Besoins" />
-          <NavItem active={activeView === 'analytics'} onClick={() => setActiveView('analytics')} icon={FileBarChart} label="Analyses IA" />
+          <NavItem active={activeView === 'analytics'} onClick={() => setActiveView('analytics')} icon={Cpu} label="Algorithmes" />
           <NavItem active={activeView === 'trash'} onClick={() => setActiveView('trash')} icon={Trash2} label="Corbeille" alertCount={deletedProducts.length + deletedFurniture.length} />
           <NavItem active={activeView === 'settings'} onClick={() => setActiveView('settings')} icon={Settings} label="Paramètres" />
         </nav>
@@ -342,8 +372,8 @@ export default function App() {
         </header>
 
         <section className="animate-fade-in">
-          {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setActiveView} />}
-          {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={() => setActiveView('movements')} onEdit={(p) => { setEditingProduct(p); setIsEditModalOpen(true); }} onImport={() => {}} onAdd={() => setIsAddModalOpen(true)} onDelete={handleMoveProductToTrash} />}
+          {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setActiveView} logisticsBalance={logisticsBalance} />}
+          {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={() => setActiveView('movements')} onEdit={(p) => { setEditingProduct(p); setIsEditModalOpen(true); }} onImport={handleImportProducts} onAdd={() => setIsAddModalOpen(true)} onDelete={(id) => setProducts(products.filter(p => p.id !== id))} />}
           {activeView === 'furniture' && <FurnitureView furniture={furniture} setFurniture={setFurniture} furnitureAudits={furnitureAudits} setFurnitureAudits={setFurnitureAudits} sites={sites} notify={notify} onImportFurniture={handleImportFurniture} />}
           {activeView === 'sites' && (
             <SitesView 
@@ -365,12 +395,11 @@ export default function App() {
           {activeView === 'tasks' && <TasksView tasks={tasks} setTasks={setTasks} notify={notify} />}
           {activeView === 'needs_list' && <NeedsReportView products={products} settings={settings} needsHistory={needsHistory} onSaveReport={(r) => setNeedsHistory([r, ...needsHistory])} onDeleteReport={(id) => setNeedsHistory(needsHistory.filter(n => n.id !== id))} sites={sites} />}
           {activeView === 'analytics' && <AnalyticsView products={products} history={history} exchangeRate={settings.exchangeRate} sites={sites} report={autoReport} analysis={autoAnalysis} isAnalyzing={isAnalyzing} onRefresh={runAutomatedAnalysis} />}
-          {activeView === 'trash' && <TrashView products={deletedProducts} furniture={deletedFurniture} onRestoreProduct={handleRestoreProduct} onDeleteProduct={handlePermanentDeleteProduct} onRestoreFurniture={handleRestoreFurniture} onDeleteFurniture={(id) => setDeletedFurniture(deletedFurniture.filter(f => f.id !== id))} />}
-          {activeView === 'settings' && <SettingsView settings={settings} onUpdateSettings={setSettings} onResetSystem={() => {localStorage.clear(); window.location.reload();}} notify={notify} />}
+          {activeView === 'trash' && <TrashView products={deletedProducts} furniture={deletedFurniture} onRestoreProduct={(id) => {}} onDeleteProduct={(id) => {}} onRestoreFurniture={(id) => {}} onDeleteFurniture={(id) => {}} />}
+          {activeView === 'settings' && <SettingsView settings={settings} onUpdateSettings={setSettings} onResetSystem={handleHardReset} notify={notify} />}
           {activeView === 'movements' && <MovementsView products={products} sites={sites} history={history} onTransaction={handleTransaction} />}
         </section>
 
-        {/* MODAUX COMMONS */}
         {isAddModalOpen && (
           <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
             <form onSubmit={handleAddProduct} className="bg-white w-full max-w-2xl rounded-[3.5rem] shadow-2xl p-12 space-y-8 overflow-y-auto max-h-[90vh]">
