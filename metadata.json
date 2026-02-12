@@ -1,6 +1,6 @@
 {
-  "name": "SmartStock Pro Intelligent",
-  "description": "Système de gestion de stock automatisé avec IA proactive, assistant vocal Live et reporting analytique.",
+  "name": "SmartStock Pro",
+  "description": "Système de gestion de stock entièrement automatisé avec algorithmes de suivi, assistant de bord et reporting analytique par script.",
   "requestFramePermissions": [
     "camera",
     "microphone"

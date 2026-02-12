@@ -1,30 +1,27 @@
-
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  LayoutDashboard, Box, History as HistoryIcon, Plus, AlertTriangle, 
-  Trash2, Search, X, DollarSign, Settings as SettingsIcon, Edit2, 
-  Sparkles, Loader2, ShieldAlert, ShieldCheck, 
-  Armchair, FileText, Camera, Upload, 
-  ImageIcon, Globe, Activity, FileSpreadsheet,
-  Printer, User, ArrowRightLeft, Factory, Truck, MapPin, 
-  BrainCircuit, Microscope, Wand2, Zap, ScanFace, LogOut, ChevronDown, ChevronUp, Filter,
-  BarChart as BarChartIcon, PieChart as PieChartIcon, 
-  CheckCircle2, ChevronRight, Info, Database, Shield, Laptop, 
-  Settings2, Wrench, Download, Calendar, Clock, TrendingUp,
-  FileSearch,
-  AlertCircle,
-  Coins,
-  ClipboardList,
-  FileUp,
-  RefreshCcw
+  LayoutDashboard, Box, History as HistoryIcon, Activity, LogOut, 
+  Settings, CheckSquare, FileBarChart, ListChecks, Globe, X, RefreshCw,
+  BellRing, AlertCircle, MapPin, CheckCircle2, Info, Lamp, ArrowLeftRight,
+  ClipboardList, Search, Truck, Command, AlertTriangle, Database
 } from 'lucide-react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  Cell, PieChart, Pie, Legend 
-} from 'recharts';
-import { Product, InventoryLog, ViewType, Site, Furniture, RapportAutomatique, Supplier } from './types';
-import { INITIAL_PRODUCTS, INITIAL_FURNITURE, INITIAL_CATEGORIES } from './constants';
-import { getAutomatedReport, parseInventoryData } from './services/automationService';
+import { Product, InventoryLog, ViewType, Task, AppSettings, NeedReport, Site, Furniture, FurnitureAuditSession, Supplier } from './types';
+import { INITIAL_CATEGORIES, INITIAL_FURNITURE, INITIAL_SITES, INITIAL_UNITS, INITIAL_SUPPLIERS } from './constants';
+
+// Importation des vues modulaires
+import { DashboardView } from './DashboardView';
+import { InventoryView } from './InventoryView';
+import { GlobalHistoryView } from './GlobalHistoryView';
+import { TasksView } from './TasksView';
+import { AnalyticsView } from './AnalyticsView';
+import { AuditView } from './AuditView';
+import { NeedsReportView } from './NeedsReportView';
+import { SettingsView } from './SettingsView';
+import { LoginView } from './LoginView';
+import { SitesView } from './SitesView';
+import { FurnitureView } from './FurnitureView';
+import { MovementsView } from './MovementsView';
+import { SuppliersView } from './SuppliersView';
 
 const getStored = <T,>(key: string, defaultValue: T): T => {
   const saved = localStorage.getItem(key);
@@ -32,1191 +29,907 @@ const getStored = <T,>(key: string, defaultValue: T): T => {
   try { return JSON.parse(saved); } catch (e) { return defaultValue; }
 };
 
-// --- Professional UI Components ---
-
-const Badge = ({ status }: { status: string }) => {
-  const styles: Record<string, string> = {
-    OPTIMAL: "bg-emerald-50 text-emerald-700 border-emerald-100",
-    CRITIQUE: "bg-rose-50 text-rose-700 border-rose-100",
-    RÉAPPRO: "bg-amber-50 text-amber-700 border-amber-100",
-    VÉROUILLÉ: "bg-slate-100 text-slate-600 border-slate-200",
-    NEUF: "bg-emerald-50 text-emerald-700 border-emerald-100",
-    BON: "bg-blue-50 text-blue-700 border-blue-100",
-    USÉ: "bg-amber-50 text-amber-700 border-amber-100",
-    ENDOMMAGÉ: "bg-rose-50 text-rose-700 border-rose-100",
-    ENTRY: "bg-emerald-50 text-emerald-700 border-emerald-100",
-    EXIT: "bg-rose-50 text-rose-700 border-rose-100",
-    TRANSFER: "bg-blue-50 text-blue-700 border-blue-100",
-    ADJUSTMENT: "bg-slate-100 text-slate-600 border-slate-200"
-  };
-  return (
-    <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter border flex items-center gap-1 w-max ${styles[status] || styles.OPTIMAL}`}>
-      <div className={`w-1 h-1 rounded-full ${['CRITIQUE', 'ENDOMMAGÉ', 'RÉAPPRO', 'EXIT'].includes(status) ? (status === 'RÉAPPRO' ? 'bg-amber-600' : 'bg-rose-600') : 'bg-current'}`} />
-      {status}
-    </div>
-  );
+const DEFAULT_SETTINGS: AppSettings = {
+  enterpriseName: 'SmartStock ERP',
+  locationId: 'RDC_HQ_01',
+  exchangeRate: 2800,
+  primaryCurrency: 'Fc',
+  defaultSafetyMargin: 20,
+  autoBackup: true,
+  units: INITIAL_UNITS
 };
 
-const NavItem = ({ active, onClick, icon: Icon, label }: any) => (
+interface Notification {
+  id: number;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
+const NavItem = ({ active, onClick, icon: Icon, label, alertCount = 0 }: any) => (
   <button 
     onClick={onClick} 
-    className={`w-full flex items-center gap-4 px-8 py-5 rounded-full font-black uppercase text-[10px] tracking-widest transition-all ${active ? 'bg-white text-[#143d21] shadow-xl scale-[1.02]' : 'text-white/60 hover:bg-white/5 hover:text-white translate-x-0 hover:translate-x-1'}`}
+    className={`w-full flex items-center justify-between px-5 py-3.5 rounded-2xl font-bold text-[9px] uppercase tracking-wider transition-all duration-300 mb-1 ${
+      active 
+        ? 'nav-item-active' 
+        : 'text-slate-400 hover:text-white hover:bg-white/5'
+    }`}
   >
-    <Icon className={`w-4 h-4 ${active ? 'text-[#143d21]' : ''}`} />
-    {label}
-  </button>
-);
-
-// --- Sub-Views ---
-
-const DashboardView = ({ products, furniture, history, setActiveView, exchangeRate }: any) => {
-  const totalValFc = products.reduce((a: any, b: any) => {
-    const price = b.currency === '$' ? b.unitPrice * exchangeRate : b.unitPrice;
-    return a + (b.currentStock * price);
-  }, 0);
-  const totalValUsd = totalValFc / exchangeRate;
-  
-  const totalAssetsFc = furniture.reduce((a: any, b: any) => a + (b.purchasePrice || 0), 0);
-  const totalAssetsUsd = totalAssetsFc / exchangeRate;
-  
-  const ruptures = products.filter((p: any) => p.currentStock <= p.minStock).length;
-
-  const chartData = useMemo(() => {
-    const stats: Record<string, number> = {};
-    products.forEach(p => {
-      const price = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
-      stats[p.category] = (stats[p.category] || 0) + (p.currentStock * price);
-    });
-    return Object.entries(stats).map(([label, valeur]) => ({ label, valeur }));
-  }, [products, exchangeRate]);
-
-  return (
-    <div className="space-y-10 animate-fade-in">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatCard 
-          label="Valeur Consommables" 
-          value={`${totalValFc.toLocaleString()} Fc`} 
-          subValue={`${totalValUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} $`}
-          icon={DollarSign} 
-          badge="RÉEL" 
-        />
-        <StatCard 
-          label="Patrimoine Mobilier" 
-          value={`${totalAssetsFc.toLocaleString()} Fc`} 
-          subValue={`${totalAssetsUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} $`}
-          icon={Database} 
-          badge={furniture.length > 0 ? "ACTIF" : "VIDE"} 
-        />
-        <StatCard label="Ruptures de Stock" value={ruptures} icon={AlertTriangle} alert={ruptures > 0} />
-        <StatCard label="Actifs Gérés" value={furniture.length} icon={Armchair} badge="OPÉ" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 space-y-10">
-          <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-            <div className="p-10 flex justify-between items-center border-b border-slate-50">
-              <h3 className="text-xs font-black uppercase italic tracking-widest text-slate-500 flex items-center gap-3">
-                <BarChartIcon className="w-4 h-4" /> Répartition par Catégorie (Fc)
-              </h3>
-            </div>
-            <div className="p-10 h-[300px]">
-              {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="label" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} width={100} />
-                    <Tooltip 
-                      cursor={{ fill: '#f8fafc' }}
-                      contentStyle={{ backgroundColor: '#fff', borderRadius: '15px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}
-                      itemStyle={{ fontWeight: 900, color: '#143d21' }}
-                      formatter={(value: number) => [`${value.toLocaleString()} Fc`, 'Valeur']}
-                    />
-                    <Bar dataKey="valeur" radius={[0, 8, 8, 0]}>
-                      {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#143d21' : '#10b981'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center opacity-30">
-                  <PieChartIcon className="w-12 h-12 mb-4" />
-                  <p className="text-[10px] font-black uppercase italic">Aucune donnée statistique</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-            <div className="p-10 flex justify-between items-center border-b border-slate-50">
-              <h3 className="text-xs font-black uppercase italic tracking-widest text-slate-500 flex items-center gap-3">
-                <Activity className="w-4 h-4" /> Flux de Stock Récents
-              </h3>
-              <button onClick={() => setActiveView('history')} className="text-[8px] font-black uppercase underline tracking-widest text-slate-900">Journal Complet</button>
-            </div>
-            <div className="flex-1 overflow-y-auto max-h-[400px] p-6 space-y-2">
-              {history.slice(-10).reverse().map((log: any) => (
-                <div key={log.id} className="flex items-center justify-between p-6 bg-slate-50/50 rounded-2xl group hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${log.changeAmount > 0 ? 'bg-emerald-50 text-emerald-500' : 'bg-slate-200 text-slate-500'}`}>
-                      {log.changeAmount > 0 ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                    </div>
-                    <div>
-                      <h5 className="text-[11px] font-black uppercase text-slate-900">{log.productName}</h5>
-                      <p className="text-[8px] font-bold text-slate-500 uppercase tabular-nums">{new Date(log.date).toLocaleTimeString('fr-FR')}</p>
-                    </div>
-                  </div>
-                  <div className={`text-sm font-black italic ${log.changeAmount > 0 ? 'text-emerald-500' : 'text-slate-900'}`}>
-                    {log.changeAmount > 0 ? `+${log.changeAmount}` : log.changeAmount}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <h3 className="text-[10px] font-black uppercase italic tracking-widest text-slate-500 px-4">Actions Rapides</h3>
-          <WorkflowCard onClick={() => setActiveView('monthly_report')} icon={FileText} label="Générer Rapport Statistique" />
-          <WorkflowCard onClick={() => setActiveView('import')} icon={FileSpreadsheet} label="Importation de Données" />
-          <WorkflowCard onClick={() => setActiveView('furniture')} icon={Armchair} label="Inventaire Mobilier" />
-          
-          <div className="mt-10 p-10 bg-[#143d21] rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
-            <ShieldCheck className="w-8 h-8 mb-6 text-emerald-400" />
-            <h5 className="text-[11px] font-black uppercase tracking-widest mb-2 italic">Données Sécurisées</h5>
-            <p className="text-[9px] font-medium text-emerald-100/70 leading-relaxed uppercase italic">Calculs algorithmiques locaux. Pas de dépendance externe.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const StatCard = ({ label, value, subValue, icon: Icon, alert, badge }: any) => (
-  <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-between h-full">
-    <div>
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-6 ${alert ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-400'}`}><Icon className="w-5 h-5" /></div>
-      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{label}</p>
-    </div>
-    <div>
-      <div className="flex justify-between items-end">
-        <h4 className={`text-3xl font-black italic tracking-tighter leading-none ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h4>
-        {badge && <span className="text-[8px] font-black px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">{badge}</span>}
-      </div>
-      {subValue && <p className="text-[11px] font-bold text-emerald-600 mt-2 uppercase italic tracking-tighter tabular-nums">{subValue}</p>}
-    </div>
-  </div>
-);
-
-// Fix for missing InventoryStat component
-const InventoryStat = ({ label, value, icon: Icon, alert }: any) => (
-  <div className={`bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-6 ${alert ? 'bg-rose-50/30' : ''}`}>
-    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${alert ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
-      <Icon className="w-6 h-6" />
-    </div>
-    <div>
-      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{label}</p>
-      <h4 className={`text-xl font-black italic tracking-tighter tabular-nums ${alert ? 'text-rose-600' : 'text-slate-900'}`}>{value}</h4>
-    </div>
-  </div>
-);
-
-const WorkflowCard = ({ icon: Icon, label, onClick }: any) => (
-  <button onClick={onClick} className="w-full p-6 bg-white border border-slate-100 rounded-[2rem] shadow-sm flex items-center justify-between group hover:border-[#143d21] transition-all">
     <div className="flex items-center gap-4">
-      <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center group-hover:bg-[#143d21] group-hover:text-white transition-all">
-        <Icon className="w-5 h-5" />
-      </div>
-      <span className="text-[10px] font-black uppercase italic tracking-tight text-slate-900">{label}</span>
+      <Icon className={`w-4 h-4 ${active ? 'text-[#1a3a22]' : ''}`} />
+      {label}
     </div>
-    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-900 transition-colors" />
+    {alertCount > 0 && (
+      <span className="bg-rose-500 text-white w-4 h-4 rounded-full flex items-center justify-center text-[7px] animate-pulse">
+        {alertCount}
+      </span>
+    )}
   </button>
 );
 
-const InventoryView = ({ products, searchTerm, setSearchTerm, setIsEditModalOpen, setEditingProduct, handleExport, exchangeRate, onImportSuccess, showToast }: any) => {
-  const [filterCategory, setFilterCategory] = useState('TOUTES');
-  const [filterStatus, setFilterStatus] = useState('TOUS');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export default function App() {
+  const [activeView, setActiveView] = useState<ViewType>('dashboard');
+  const [isLoggedIn, setIsLoggedIn] = useState(getStored('isLoggedIn', false));
+  const [settings, setSettings] = useState<AppSettings>(getStored('ss_settings', DEFAULT_SETTINGS));
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  
+  // États de recherche globale
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
-  const filtered = useMemo(() => {
-    return products.filter((p: any) => {
-      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.id.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = filterCategory === 'TOUTES' || p.category === filterCategory;
-      const status = p.currentStock === 0 ? 'CRITIQUE' : (p.currentStock <= p.minStock ? 'RÉAPPRO' : 'OPTIMAL');
-      const matchesStatus = filterStatus === 'TOUS' || status === filterStatus;
-      return matchesSearch && matchesCategory && matchesStatus;
-    });
-  }, [products, searchTerm, filterCategory, filterStatus]);
+  // État du modal de déconnexion
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
-  const totalValue = filtered.reduce((acc: number, p: any) => {
-    const price = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
-    return acc + (p.currentStock * price);
-  }, 0);
+  // TOUS LES STATES SONT VIDES PAR DÉFAUT
+  const [products, setProducts] = useState<Product[]>(getStored('ss_products', []));
+  const [furniture, setFurniture] = useState<Furniture[]>(getStored('ss_furniture', []));
+  const [furnitureAudits, setFurnitureAudits] = useState<FurnitureAuditSession[]>(getStored('ss_furniture_audits', []));
+  const [history, setHistory] = useState<InventoryLog[]>(getStored('ss_history', []));
+  const [tasks, setTasks] = useState<Task[]>(getStored('ss_tasks', []));
+  const [needsHistory, setNeedsHistory] = useState<NeedReport[]>(getStored('ss_needs_history', []));
+  const [sites, setSites] = useState<Site[]>(getStored('ss_sites', []));
+  const [suppliers, setSuppliers] = useState<Supplier[]>(getStored('ss_suppliers', []));
+  
+  const [movementModal, setMovementModal] = useState<{isOpen: boolean, type: 'entry'|'exit', product: Product | null}>({isOpen: false, type: 'entry', product: null});
+  const [editModal, setEditModal] = useState<{isOpen: boolean, product: Product | null}>({isOpen: false, product: null});
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [newProductData, setNewProductData] = useState({
+    name: '', category: 'Alimentaire', unitPrice: 0, currency: 'Fc' as 'Fc' | '$', 
+    minStock: 10, unit: settings.units[0] || 'PIÈCE', initialStock: 0, 
+    siteId: sites.length > 0 ? sites[0].id : ''
+  });
+
+  // Détection du premier lancement (aucune donnée)
+  const [isFirstLaunch, setIsFirstLaunch] = useState(() => {
+    const hasProducts = getStored('ss_products', []).length > 0;
+    const hasSites = getStored('ss_sites', []).length > 0;
+    const hasFurniture = getStored('ss_furniture', []).length > 0;
+    return !hasProducts && !hasSites && !hasFurniture;
+  });
+
+  const notify = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 3500);
+  };
+
+  const handleTransaction = (prodId: string, amount: number, reason: string, type: any = 'adjustment') => {
+    const product = products.find(p => p.id === prodId);
+    if (!product) return;
+    const finalStock = product.currentStock + amount;
+    if (finalStock < 0) {
+      notify("Stock insuffisant pour cette opération", "error");
+      return;
+    }
+    const updated = products.map(p => p.id === prodId ? { ...p, currentStock: finalStock, lastInventoryDate: new Date().toISOString() } : p);
+    setProducts(updated);
+    const newLog: InventoryLog = { 
+        id: `LOG-${Date.now()}`.toUpperCase(),
+        date: new Date().toISOString(), 
+        type: type, 
+        productId: prodId, 
+        productName: product.name, 
+        changeAmount: amount, 
+        finalStock, 
+        reason, 
+        responsible: 'ADMIN_PRO', 
+        siteId: product.siteId 
+    };
+    setHistory([newLog, ...history]);
+    setMovementModal({isOpen: false, type: 'entry', product: null});
+    if (type !== 'adjustment') {
+      notify(`Mouvement enregistré : ${amount > 0 ? '+' : ''}${amount} ${product.name}`);
+    }
+  };
+
+  const handleCopySiteProducts = (fromSiteId: string, toSiteId: string) => {
+    const productsToCopy = products.filter(p => p.siteId === fromSiteId);
+    if (productsToCopy.length === 0) {
+      notify("Le site source est vide.", "error");
+      return;
+    }
+    
+    const newClonedProducts = productsToCopy.map(p => ({
+      ...p,
+      id: `SKU-CLONE-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+      siteId: toSiteId,
+      currentStock: 0,
+      lastInventoryDate: new Date().toISOString()
+    }));
+
+    setProducts(prev => [...prev, ...newClonedProducts]);
+    notify(`Structure clonée : ${newClonedProducts.length} articles copiés vers le site cible.`);
+  };
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>, targetSiteId?: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const content = event.target?.result as string;
-      const items = parseInventoryData(content);
-      if (items.length > 0) {
-        const newProducts = items.map(item => ({
-          ...item,
-          id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          minStock: 5,
-          monthlyNeed: 0,
-          siteId: 'S1',
-          lastInventoryDate: new Date().toISOString()
-        }));
-        onImportSuccess(newProducts as Product[]);
-        showToast(`${newProducts.length} articles importés par fichier CSV`);
-      } else {
-        showToast("Le format du fichier semble incorrect ou vide", "error");
+      const text = event.target?.result as string;
+      const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+      if (lines.length <= 1) return;
+
+      const newProducts = [...products];
+      const newLogs: InventoryLog[] = [];
+      const timestamp = new Date().toISOString();
+      let updatedCount = 0;
+      let addedCount = 0;
+
+      const parseCSVLine = (line: string) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') inQuotes = !inQuotes;
+          else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else current += char;
+        }
+        result.push(current.trim());
+        return result.map(s => s.replace(/^"|"$/g, ''));
+      };
+
+      for (let i = 1; i < lines.length; i++) {
+        const parts = parseCSVLine(lines[i]);
+        if (parts.length < 4) continue;
+
+        const [id, name, category, stock, min, unit, price, currency] = parts;
+        const stockNum = parseInt(stock) || 0;
+        const minNum = parseInt(min) || 0;
+        const priceNum = parseFloat(price) || 0;
+
+        let existingIdx = newProducts.findIndex(p => p.id === id);
+        if (existingIdx === -1 && name) {
+          existingIdx = newProducts.findIndex(p => p.name.toLowerCase() === name.toLowerCase() && (targetSiteId ? p.siteId === targetSiteId : true));
+        }
+
+        if (existingIdx !== -1) {
+          const old = newProducts[existingIdx];
+          const updated: Product = {
+            ...old,
+            name: name || old.name,
+            category: category || old.category,
+            currentStock: stockNum,
+            minStock: minNum,
+            unit: unit || old.unit,
+            unitPrice: priceNum || old.unitPrice,
+            currency: (currency as 'Fc' | '$') || old.currency,
+            lastInventoryDate: timestamp
+          };
+          
+          if (old.currentStock !== stockNum) {
+            newLogs.push({
+              id: `LOG-IMP-${Date.now()}-${i}`,
+              date: timestamp,
+              type: 'adjustment',
+              productId: old.id,
+              productName: old.name,
+              changeAmount: stockNum - old.currentStock,
+              finalStock: stockNum,
+              reason: 'Sync via Import CSV',
+              responsible: 'IMPORT_SYSTEM',
+              siteId: old.siteId
+            });
+          }
+          newProducts[existingIdx] = updated;
+          updatedCount++;
+        } else if (name) {
+          const newId = id || `SKU-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+          const product: Product = {
+            id: newId,
+            name,
+            category: category || 'Autre',
+            currentStock: stockNum,
+            minStock: minNum,
+            monthlyNeed: minNum * 2,
+            unit: unit || 'PIÈCE',
+            unitPrice: priceNum,
+            currency: (currency as 'Fc' | '$') || 'Fc',
+            siteId: targetSiteId || (sites.length > 0 ? sites[0].id : ''),
+            lastInventoryDate: timestamp
+          };
+          newProducts.push(product);
+          newLogs.push({
+            id: `LOG-IMP-${Date.now()}-${i}`,
+            date: timestamp,
+            type: 'entry',
+            productId: newId,
+            productName: name,
+            changeAmount: stockNum,
+            finalStock: stockNum,
+            reason: 'Initialisation via Import',
+            responsible: 'IMPORT_SYSTEM',
+            siteId: targetSiteId || (sites.length > 0 ? sites[0].id : '')
+          });
+          addedCount++;
+        }
       }
+
+      setProducts(newProducts);
+      setHistory(prev => [...newLogs, ...prev]);
+      notify(`Importation CSV réussie : ${updatedCount} mis à jour, ${addedCount} créés.`);
+      e.target.value = '';
     };
     reader.readAsText(file);
-    // Reset input
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  return (
-    <div className="space-y-10 animate-fade-in">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <InventoryStat label="Articles Filtrés" value={filtered.length} icon={Box} />
-        <InventoryStat label="Valeur du Filtre" value={`${totalValue.toLocaleString()} Fc`} icon={DollarSign} />
-        <InventoryStat label="Alertes Stock" value={filtered.filter((p:any) => p.currentStock <= p.minStock).length} icon={Zap} alert={filtered.some((p:any) => p.currentStock <= p.minStock)} />
-        <InventoryStat label="Ruptures" value={filtered.filter((p:any) => p.currentStock === 0).length} icon={ShieldAlert} alert={filtered.some((p:any) => p.currentStock === 0)} />
-      </div>
+  const handleResetSystem = () => {
+    localStorage.clear();
+    setProducts([]);
+    setFurniture([]);
+    setFurnitureAudits([]);
+    setHistory([]);
+    setTasks([]);
+    setNeedsHistory([]);
+    setSites([]);
+    setSuppliers([]);
+    setSettings(DEFAULT_SETTINGS);
+    setActiveView('dashboard');
+    setIsLoggedIn(false);
+    setIsFirstLaunch(true);
+    notify("Système réinitialisé avec succès", "info");
+  };
 
-      <div className="flex flex-col xl:flex-row gap-6 bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm no-print">
-        <div className="flex-1 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1 group">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-[#143d21] transition-colors" />
-            <input 
-              type="text" 
-              placeholder="Chercher désignation, SKU..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-14 pr-6 py-5 bg-slate-50 border-none rounded-[1.5rem] text-xs font-black uppercase tracking-widest outline-none ring-offset-0 focus:ring-2 ring-[#143d21]/10 transition-all text-slate-900"
-            />
-          </div>
-          
-          <select 
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-8 py-5 bg-slate-50 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest outline-none appearance-none cursor-pointer hover:bg-slate-100 transition-colors text-slate-800"
-          >
-            <option value="TOUTES">Catégories: Toutes</option>
-            {INITIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setIsLogoutModalOpen(false);
+    notify("Déconnexion réussie. À bientôt !", "info");
+  };
 
-          <select 
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-8 py-5 bg-slate-50 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest outline-none appearance-none cursor-pointer hover:bg-slate-100 transition-colors text-slate-800"
-          >
-            <option value="TOUS">Statuts: Tous</option>
-            <option value="OPTIMAL">Statut: Optimal</option>
-            <option value="RÉAPPRO">Statut: Réappro</option>
-            <option value="CRITIQUE">Statut: Critique</option>
-          </select>
-        </div>
+  const handleAddProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (sites.length === 0) {
+      notify("Vous devez d'abord créer un site.", "error");
+      return;
+    }
+    const id = `SKU-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const product: Product = {
+      id, 
+      name: newProductData.name, 
+      category: newProductData.category, 
+      currentStock: newProductData.initialStock,
+      minStock: newProductData.minStock, 
+      monthlyNeed: newProductData.minStock * 2,
+      unit: newProductData.unit, 
+      unitPrice: newProductData.unitPrice, 
+      currency: newProductData.currency,
+      siteId: newProductData.siteId || (sites.length > 0 ? sites[0].id : ''), 
+      lastInventoryDate: new Date().toISOString()
+    };
+    setProducts([product, ...products]);
+    if (product.currentStock > 0) {
+      handleTransaction(id, product.currentStock, 'Stock Initial', 'entry');
+    }
+    setIsAddModalOpen(false);
+    notify(`Produit "${product.name}" ajouté au catalogue.`);
+    setNewProductData({ 
+      name: '', category: 'Alimentaire', unitPrice: 0, currency: 'Fc', 
+      minStock: 10, unit: settings.units[0] || 'PIÈCE', initialStock: 0, 
+      siteId: sites.length > 0 ? sites[0].id : '' 
+    });
+  };
 
-        <div className="flex gap-4">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileImport} 
-            accept=".csv,.txt" 
-            className="hidden" 
-          />
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="px-10 py-5 bg-emerald-50 text-emerald-800 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-emerald-100 transition-all border border-emerald-100"
-          >
-            <FileUp className="w-4 h-4" /> Importer
-          </button>
-          <button 
-            onClick={() => handleExport()} 
-            className="px-10 py-5 bg-slate-50 text-slate-700 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-slate-100 transition-all border border-slate-200"
-          >
-            <Download className="w-4 h-4" /> Export
-          </button>
-          <button 
-            onClick={() => { setEditingProduct(null); setIsEditModalOpen(true); }}
-            className="px-10 py-5 bg-[#143d21] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 hover:scale-[1.02] transition-all"
-          >
-            <Plus className="w-5 h-5" /> Nouvel Article
-          </button>
-        </div>
-      </div>
+  const handleUpdateProduct = (updatedProduct: Product) => {
+    setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+    notify(`Fiche produit "${updatedProduct.name}" mise à jour.`);
+    setEditModal({isOpen: false, product: null});
+  };
 
-      <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50/70 border-b border-slate-100">
-            <tr className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em]">
-              <th className="px-12 py-10">Référence / Produit</th>
-              <th className="px-8 py-10">Classification</th>
-              <th className="px-8 py-10">Inventaire / Seuil</th>
-              <th className="px-8 py-10">Disponibilité</th>
-              <th className="px-8 py-10 text-right">Valo. Unitaire</th>
-              <th className="px-12 py-10 text-right">Valo. Totale</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-12 py-40 text-center">
-                  <div className="max-w-xs mx-auto space-y-6 opacity-40">
-                    <Database className="w-20 h-20 mx-auto text-slate-400" />
-                    <p className="text-[11px] font-black uppercase italic tracking-widest text-slate-600">Aucun registre correspondant</p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              filtered.map((p: any) => {
-                const priceInFc = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
-                return (
-                  <tr key={p.id} className="group hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => { setEditingProduct(p); setIsEditModalOpen(true); }}>
-                    <td className="px-12 py-10">
-                      <div className="flex items-center gap-6">
-                        <div className="w-14 h-14 bg-slate-200 rounded-[1.2rem] flex items-center justify-center text-slate-500 group-hover:bg-white group-hover:shadow-sm transition-all overflow-hidden">
-                          <Box className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="text-[7px] font-black text-slate-500 uppercase tracking-tighter mb-1">SKU-{p.id.slice(-8).toUpperCase()}</p>
-                          <h5 className="text-[13px] font-black italic uppercase text-slate-900 leading-none">{p.name}</h5>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-8 py-10">
-                      <p className="text-[10px] font-black text-slate-900 uppercase leading-none mb-1.5">{p.category}</p>
-                      <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Entrepôt Central</p>
-                    </td>
-                    <td className="px-8 py-10">
-                      <div className="flex items-baseline gap-1.5 leading-none mb-2">
-                        <span className={`text-xl font-black italic tabular-nums ${p.currentStock <= p.minStock ? 'text-rose-600' : 'text-slate-900'}`}>{p.currentStock}</span>
-                        <span className="text-[9px] font-black text-slate-400">/ {p.minStock}</span>
-                      </div>
-                      <div className="w-16 h-1 bg-slate-200 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-500 ${p.currentStock === 0 ? 'bg-rose-600' : (p.currentStock <= p.minStock ? 'bg-amber-400' : 'bg-emerald-500')}`} 
-                          style={{ width: `${Math.min(100, (p.currentStock / (p.minStock * 2 || 10)) * 100)}%` }} 
-                        />
-                      </div>
-                    </td>
-                    <td className="px-8 py-10">
-                      <Badge status={p.currentStock === 0 ? 'CRITIQUE' : (p.currentStock <= p.minStock ? 'RÉAPPRO' : 'OPTIMAL')} />
-                    </td>
-                    <td className="px-8 py-10 text-right">
-                      <p className="text-[11px] font-black italic text-slate-900 tabular-nums leading-none mb-1.5">{p.unitPrice.toLocaleString()} {p.currency}</p>
-                      <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Par {p.unit || 'Pièce'}</p>
-                    </td>
-                    <td className="px-12 py-10 text-right">
-                      <p className="text-[15px] font-black italic text-[#143d21] tabular-nums leading-none mb-1.5">{(p.currentStock * priceInFc).toLocaleString()} Fc</p>
-                      <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest italic opacity-0 group-hover:opacity-100 transition-opacity">Valorisation Totale (Fc)</p>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
+  const handleDeleteProduct = (id: string) => {
+    const product = products.find(p => p.id === id);
+    if (confirm(`Supprimer définitivement ${product?.name} ?`)) {
+      setProducts(products.filter(p => p.id !== id));
+      notify(`Produit "${product?.name}" supprimé.`, "error");
+    }
+  };
 
-// --- Reporting View ---
-const ReportingView = ({ products, history, exchangeRate }: { products: Product[], history: InventoryLog[], exchangeRate: number }) => {
-  const [report, setReport] = useState<RapportAutomatique | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Logique de recherche globale
+  const globalSearchResults = useMemo(() => {
+    if (!globalSearch.trim() || globalSearch.length < 2) return null;
+    const query = globalSearch.toLowerCase();
+    
+    return {
+      products: products.filter(p => p.name.toLowerCase().includes(query)).slice(0, 4),
+      sites: sites.filter(s => s.name.toLowerCase().includes(query) || s.location.toLowerCase().includes(query)).slice(0, 2),
+      tasks: tasks.filter(t => t.title.toLowerCase().includes(query)).slice(0, 2),
+      suppliers: suppliers.filter(s => s.name.toLowerCase().includes(query)).slice(0, 2)
+    };
+  }, [globalSearch, products, sites, tasks, suppliers]);
 
-  const generateReport = async () => {
-    setLoading(true);
-    // Délai simulé pour le "moteur de calcul"
-    setTimeout(async () => {
-      try {
-        const data = await getAutomatedReport(products, history, exchangeRate);
-        setReport(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }, 1000);
+  const handleSearchResultClick = (view: ViewType) => {
+    setActiveView(view);
+    setGlobalSearch('');
+    setIsSearchFocused(false);
+  };
+
+  const getViewTitle = (view: ViewType) => {
+    const mapping: Record<string, string> = {
+      dashboard: 'Tableau de Bord',
+      inventory: 'Inventaire Général',
+      movements: 'Entrées & Sorties',
+      furniture: 'Inventaire Mobilier',
+      sites: 'Gestion des Sites',
+      suppliers: 'Base Fournisseurs',
+      audit_session: 'Session d\'Audit',
+      traceability: 'Historique Complet',
+      tasks: 'Agenda des Tâches',
+      needs_list: 'États de Besoins',
+      analytics: 'Scripts Automatiques',
+      settings: 'Paramètres Système'
+    };
+    return mapping[view] || view.toUpperCase();
   };
 
   useEffect(() => {
-    if (products.length > 0 && !report) {
-      generateReport();
-    }
-  }, [products]);
-
-  if (loading) return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-10 animate-fade-in">
-      <Loader2 className="w-24 h-24 text-[#143d21] animate-spin" />
-      <div className="text-center space-y-3">
-        <h3 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Moteur de Calcul Statistique</h3>
-        <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.3em] italic">Analyse déterministe des flux en cours...</p>
-      </div>
-    </div>
-  );
-
-  if (!report) return (
-    <div className="bg-white p-24 rounded-[4rem] border border-slate-100 shadow-sm text-center space-y-12">
-      <FileSearch className="w-20 h-20 text-slate-200 mx-auto" />
-      <div className="space-y-4">
-        <h4 className="text-3xl font-black italic uppercase text-slate-900">Aucun rapport disponible</h4>
-        <p className="text-slate-500 text-sm uppercase font-black italic tracking-widest">Lancez l'audit statistique pour analyser vos stocks.</p>
-      </div>
-      <button onClick={generateReport} className="px-16 py-6 bg-[#143d21] text-white rounded-[2.5rem] font-black uppercase text-[11px] tracking-widest shadow-2xl hover:scale-105 transition-all">Générer l'Audit</button>
-    </div>
-  );
-
-  return (
-    <div className="space-y-10 animate-fade-in pb-20">
-      <div className="flex justify-between items-center no-print">
-        <h3 className="text-xs font-black uppercase italic tracking-widest text-slate-500 flex items-center gap-3">
-          <Database className="w-4 h-4 text-emerald-600" /> Audit Statistique SmartStock Pro
-        </h3>
-        <div className="flex gap-4">
-           <button onClick={() => window.print()} className="px-8 py-4 bg-white border border-slate-100 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-sm hover:bg-slate-50 flex items-center gap-3">
-             <Printer className="w-4 h-4" /> PDF
-           </button>
-           <button onClick={generateReport} className="px-8 py-4 bg-emerald-50 text-emerald-800 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest hover:bg-emerald-100 flex items-center gap-3">
-             <RefreshCcw className="w-4 h-4" /> Actualiser
-           </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 space-y-10">
-          <section className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm space-y-8">
-            <h4 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Résumé Analytique</h4>
-            <div className="p-10 bg-slate-50 rounded-[2.5rem] border-l-8 border-[#143d21]">
-              <p className="text-slate-700 leading-relaxed font-medium italic text-lg uppercase tracking-tight">
-                {report.summary}
-              </p>
-            </div>
-          </section>
-
-          <section className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm space-y-10">
-             <div className="flex justify-between items-center">
-               <h4 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Valorisation par Catégorie</h4>
-               <TrendingUp className="w-8 h-8 text-emerald-600" />
-             </div>
-             <div className="h-[400px] w-full bg-slate-50/50 p-8 rounded-[3rem]">
-               <ResponsiveContainer width="100%" height="100%">
-                 <BarChart data={report.chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#fff', borderRadius: '20px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)' }}
-                      itemStyle={{ fontWeight: 900, color: '#143d21' }}
-                    />
-                    <Bar dataKey="valeur" radius={[10, 10, 0, 0]}>
-                      {report.chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#143d21' : '#10b981'} />
-                      ))}
-                    </Bar>
-                 </BarChart>
-               </ResponsiveContainer>
-             </div>
-          </section>
-
-          <section className="space-y-6">
-            <h4 className="text-xl font-black italic uppercase tracking-widest text-slate-900 px-4">Actions Prioritaires</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {report.recommendations.map((rec, i) => (
-                <div key={i} className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-start gap-6 group hover:border-[#143d21] transition-all">
-                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-[#143d21] group-hover:text-white transition-all">
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                  <p className="text-[11px] font-black uppercase italic text-slate-700 tracking-tight leading-relaxed">{rec}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <div className="space-y-10">
-          <div className="bg-rose-50 p-10 rounded-[3.5rem] border-2 border-rose-100 space-y-8">
-            <div className="flex items-center gap-4 text-rose-700">
-              <AlertCircle className="w-8 h-8" />
-              <h5 className="text-xl font-black italic uppercase tracking-tighter">Alertes Systèmes</h5>
-            </div>
-            <div className="space-y-4">
-              {report.criticalAlerts.map((alert, i) => (
-                <div key={i} className="p-6 bg-white/60 rounded-2xl border border-rose-200">
-                  <p className="text-[10px] font-black uppercase italic text-rose-900 leading-tight">{alert}</p>
-                </div>
-              ))}
-              {report.criticalAlerts.length === 0 && (
-                 <p className="text-[10px] font-black uppercase italic text-rose-400">Aucun incident détecté.</p>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-[#143d21] p-12 rounded-[4rem] text-white shadow-2xl space-y-10 relative overflow-hidden">
-             <div className="relative z-10 space-y-8">
-                <div className="flex items-center gap-4">
-                  <DollarSign className="w-8 h-8 text-emerald-400" />
-                  <h5 className="text-xl font-black italic uppercase tracking-tighter">Projection de Coûts</h5>
-                </div>
-                <div className="space-y-4">
-                   <p className="text-emerald-100/70 text-[10px] font-black uppercase tracking-[0.3em] italic leading-none">Estimation algorithmique</p>
-                   <p className="text-lg font-black italic leading-relaxed text-emerald-50">
-                     {report.financialProjection}
-                   </p>
-                </div>
-             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const HistoryView = ({ history, searchTerm, setSearchTerm, handleExport }: any) => {
-  const [period, setPeriod] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'ALL'>('ALL');
-
-  const filtered = useMemo(() => {
-    const now = new Date();
-    return history.filter((log: any) => {
-      const matchesSearch = log.productName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           (log.responsible || '').toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const logDate = new Date(log.date);
-      let matchesPeriod = true;
-
-      if (period === 'DAY') {
-        matchesPeriod = logDate.toDateString() === now.toDateString();
-      } else if (period === 'WEEK') {
-        const weekAgo = new Date();
-        weekAgo.setDate(now.getDate() - 7);
-        matchesPeriod = logDate >= weekAgo;
-      } else if (period === 'MONTH') {
-        matchesPeriod = logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
-      } else if (period === 'YEAR') {
-        matchesPeriod = logDate.getFullYear() === now.getFullYear();
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setIsSearchFocused(false);
       }
-
-      return matchesSearch && matchesPeriod;
-    });
-  }, [history, searchTerm, period]);
-
-  const stats = useMemo(() => {
-    const entries = filtered.filter((l:any) => l.changeAmount > 0).reduce((a:number, b:any) => a + b.changeAmount, 0);
-    const exits = filtered.filter((l:any) => l.changeAmount < 0).reduce((a:number, b:any) => a + Math.abs(b.changeAmount), 0);
-    return { entries, exits, total: filtered.length };
-  }, [filtered]);
-
-  return (
-    <div className="space-y-10 animate-fade-in">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <InventoryStat label="Mouvements Totaux" value={stats.total} icon={Activity} />
-        <InventoryStat label="Total Entrées" value={stats.entries} icon={ChevronUp} />
-        <InventoryStat label="Total Sorties" value={stats.exits} icon={ChevronDown} alert={stats.exits > stats.entries} />
-      </div>
-
-      <div className="flex flex-col xl:flex-row gap-6 bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm no-print">
-        <div className="flex-1 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1 group">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-[#143d21] transition-colors" />
-            <input 
-              type="text" 
-              placeholder="Article, responsable..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-14 pr-6 py-5 bg-slate-50 border-none rounded-[1.5rem] text-xs font-black uppercase tracking-widest outline-none ring-offset-0 focus:ring-2 ring-[#143d21]/10 transition-all text-slate-900"
-            />
-          </div>
-          
-          <div className="flex bg-slate-50 p-1.5 rounded-[1.5rem] gap-1">
-            {(['DAY', 'WEEK', 'MONTH', 'YEAR', 'ALL'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${period === p ? 'bg-white text-[#143d21] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                {p === 'DAY' ? 'Jour' : p === 'WEEK' ? 'Semaine' : p === 'MONTH' ? 'Mois' : p === 'YEAR' ? 'Année' : 'Tous'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <button onClick={() => handleExport()} className="px-10 py-5 bg-[#143d21] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 hover:scale-[1.02] transition-all">
-          <Download className="w-4 h-4" /> Rapport d'Audit
-        </button>
-      </div>
-
-      <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
-              <th className="px-10 py-8">Horodatage & Type</th>
-              <th className="px-8 py-8">Article</th>
-              <th className="px-8 py-8 text-center">Quantité</th>
-              <th className="px-8 py-8 text-center">Final</th>
-              <th className="px-8 py-8">Responsable / Motif</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-10 py-32 text-center text-slate-400">
-                  <HistoryIcon className="w-16 h-16 mx-auto mb-6 opacity-20" />
-                  <p className="text-[10px] font-black uppercase tracking-widest italic">Aucun mouvement pour cette période</p>
-                </td>
-              </tr>
-            ) : (
-              filtered.reverse().map((log: any) => (
-                <tr key={log.id} className="group hover:bg-slate-50/50 transition-colors">
-                  <td className="px-10 py-8">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-2 rounded-lg ${log.changeAmount > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                        {log.changeAmount > 0 ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-black text-slate-900 uppercase leading-none mb-1">{new Date(log.date).toLocaleDateString()}</p>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{new Date(log.date).toLocaleTimeString()}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-8 text-sm font-black italic uppercase text-slate-900">{log.productName}</td>
-                  <td className="px-8 py-8 text-center font-black italic tabular-nums">
-                    <span className={log.changeAmount > 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                      {log.changeAmount > 0 ? '+' : ''}{log.changeAmount}
-                    </span>
-                  </td>
-                  <td className="px-8 py-8 text-center text-slate-400 font-black italic tabular-nums">{log.finalStock}</td>
-                  <td className="px-8 py-8">
-                    <p className="text-[9px] font-black text-slate-900 uppercase leading-none mb-1">{log.responsible || 'Sytème'}</p>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase italic tracking-tighter truncate max-w-[150px]">{log.reason || 'Std'}</p>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
-const ImportView = ({ onImportSuccess, showToast }: any) => {
-  const [inputText, setInputText] = useState("");
-  const [previewItems, setPreviewItems] = useState<any[]>([]);
-
-  const handlePreview = () => {
-    const items = parseInventoryData(inputText);
-    setPreviewItems(items);
-    if (items.length > 0) {
-      showToast(`${items.length} articles identifiés dans le texte`);
-    } else {
-      showToast("Aucune donnée valide identifiée", "error");
-    }
-  };
-
-  const confirmImport = () => {
-    const newProducts = previewItems.map(item => ({
-      ...item,
-      id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      minStock: 5,
-      monthlyNeed: 0,
-      siteId: 'S1',
-      lastInventoryDate: new Date().toISOString()
-    }));
-    onImportSuccess(newProducts);
-    setPreviewItems([]);
-    setInputText("");
-    showToast(`${newProducts.length} articles importés avec succès`);
-  };
-
-  return (
-    <div className="space-y-10 animate-fade-in max-w-5xl mx-auto">
-      <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm space-y-8">
-        <div className="flex items-center gap-6">
-          <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center">
-            <ClipboardList className="w-8 h-8" />
-          </div>
-          <div>
-            <h3 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Importation Automatisée</h3>
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-relaxed">Collez vos données (Nom, Quantité, Prix, Catégorie, Unité) séparées par des points-virgules.</p>
-          </div>
-        </div>
-
-        <textarea 
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="Ex: Coca;50;1500;Boisson;pces&#10;Riz 25kg;10;45000;Alimentaire;sac"
-          className="w-full h-48 p-8 bg-slate-50 border-none rounded-[2.5rem] font-mono text-sm outline-none focus:ring-2 ring-blue-500/10 transition-all text-slate-800 placeholder:opacity-40"
-        />
-
-        <div className="flex justify-end gap-4">
-          <button 
-            onClick={handlePreview}
-            className="px-10 py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all"
-          >
-            Analyser le texte
-          </button>
-        </div>
-      </div>
-
-      {previewItems.length > 0 && (
-        <div className="space-y-8 animate-fade-in">
-          <div className="bg-emerald-500 p-10 rounded-[3rem] text-white flex justify-between items-center shadow-xl">
-             <div>
-               <h4 className="text-2xl font-black italic uppercase tracking-tighter">Aperçu de l'importation</h4>
-               <p className="text-[10px] font-bold text-emerald-100/70 uppercase italic tracking-widest">Vérifiez les données avant intégration finale</p>
-             </div>
-             <button onClick={confirmImport} className="px-10 py-5 bg-white text-emerald-900 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-lg flex items-center gap-3">
-                <CheckCircle2 className="w-4 h-4" /> Valider l'importation
-             </button>
-          </div>
-
-          <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 border-b border-slate-100">
-                <tr className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
-                  <th className="px-10 py-8">Article</th>
-                  <th className="px-8 py-8">Catégorie</th>
-                  <th className="px-8 py-8 text-center">Quantité</th>
-                  <th className="px-10 py-8 text-right">Prix (Fc)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {previewItems.map((item, idx) => (
-                  <tr key={idx}>
-                    <td className="px-10 py-8 text-sm font-black italic uppercase text-slate-900">{item.name}</td>
-                    <td className="px-8 py-8"><Badge status="OPTIMAL" /></td>
-                    <td className="px-8 py-8 text-center text-lg font-black italic tabular-nums text-slate-900">{item.currentStock}</td>
-                    <td className="px-10 py-8 text-right font-black italic text-slate-900">{item.unitPrice?.toLocaleString()} Fc</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/**
- * Vue de gestion du patrimoine mobilier et des actifs immobilisés.
- * Fix for missing FurnitureView component.
- */
-const FurnitureView = ({ furniture, searchTerm, setSearchTerm, setIsEditModalOpen, setEditingFurniture }: any) => {
-  const filtered = furniture.filter((f: any) => 
-    f.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    f.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  return (
-    <div className="space-y-10 animate-fade-in">
-      <div className="flex flex-col xl:flex-row gap-6 bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm no-print">
-        <div className="relative flex-1 group">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-[#143d21] transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Chercher nom, code, affectation..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-14 pr-6 py-5 bg-slate-50 border-none rounded-[1.5rem] text-xs font-black uppercase tracking-widest outline-none ring-offset-0 focus:ring-2 ring-[#143d21]/10 transition-all text-slate-900"
-          />
-        </div>
-        <button 
-          onClick={() => { setEditingFurniture(null); setIsEditModalOpen(true); }}
-          className="px-10 py-5 bg-[#143d21] text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 hover:scale-[1.02] transition-all"
-        >
-          <Plus className="w-5 h-5" /> Nouvel Actif
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-        {filtered.length === 0 ? (
-          <div className="col-span-full py-32 text-center opacity-30">
-            <Armchair className="w-20 h-20 mx-auto mb-6" />
-            <p className="text-[11px] font-black uppercase italic tracking-widest">Aucun actif mobilier répertorié</p>
-          </div>
-        ) : (
-          filtered.map((f: any) => (
-            <div key={f.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm group hover:border-[#143d21] transition-all cursor-pointer" onClick={() => { setEditingFurniture(f); setIsEditModalOpen(true); }}>
-              <div className="flex justify-between items-start mb-6">
-                <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-[#143d21] group-hover:text-white transition-all">
-                  <Armchair className="w-6 h-6" />
-                </div>
-                <Badge status={f.condition.toUpperCase()} />
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-1">{f.code}</p>
-                  <h5 className="text-xl font-black italic uppercase text-slate-900 leading-none">{f.name}</h5>
-                </div>
-                <div className="pt-4 border-t border-slate-50 flex justify-between items-end">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Affecté à</p>
-                    <p className="text-[11px] font-bold text-slate-900 uppercase italic">{f.assignedTo || 'Non assigné'}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Valeur d'achat</p>
-                    <p className="text-[13px] font-black text-[#143d21] tabular-nums">{(f.purchasePrice || 0).toLocaleString()} Fc</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
-
-// --- App Entry Point ---
-
-const App: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [activeView, setActiveView] = useState<ViewType>('dashboard');
-  const [products, setProducts] = useState<Product[]>(() => getStored('ss_products', INITIAL_PRODUCTS));
-  const [furniture, setFurniture] = useState<Furniture[]>(() => getStored('ss_furniture', INITIAL_FURNITURE));
-  const [history, setHistory] = useState<InventoryLog[]>(() => getStored('ss_history', []));
-  const [exchangeRate, setExchangeRate] = useState<number>(() => getStored('ss_exchange_rate', 2850));
-  const [searchTerm, setSearchTerm] = useState('');
-  
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [editingFurniture, setEditingFurniture] = useState<Furniture | null>(null);
-  
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('ss_products', JSON.stringify(products));
     localStorage.setItem('ss_furniture', JSON.stringify(furniture));
+    localStorage.setItem('ss_furniture_audits', JSON.stringify(furnitureAudits));
     localStorage.setItem('ss_history', JSON.stringify(history));
-    localStorage.setItem('ss_exchange_rate', JSON.stringify(exchangeRate));
-  }, [products, furniture, history, exchangeRate]);
+    localStorage.setItem('ss_tasks', JSON.stringify(tasks));
+    localStorage.setItem('ss_settings', JSON.stringify(settings));
+    localStorage.setItem('ss_needs_history', JSON.stringify(needsHistory));
+    localStorage.setItem('ss_sites', JSON.stringify(sites));
+    localStorage.setItem('ss_suppliers', JSON.stringify(suppliers));
+    localStorage.setItem('isLoggedIn', JSON.stringify(isLoggedIn));
+  }, [products, furniture, furnitureAudits, history, tasks, isLoggedIn, settings, needsHistory, sites, suppliers]);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
-  };
+  // ÉCRAN DE PREMIER LANCEMENT - BASE DE DONNÉES VIERGE
+  if (isFirstLaunch) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#1a3a22] p-6 relative overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-500/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-400/5 rounded-full blur-[120px]" />
+        
+        <div className="bg-white w-full max-w-md rounded-[4rem] p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] animate-fade-in relative z-10 border border-white/20">
+          <div className="text-center mb-12">
+            <div className="w-24 h-24 bg-emerald-100 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-inner">
+              <Database className="w-12 h-12 text-emerald-600" />
+            </div>
+            <h2 className="text-3xl font-black italic uppercase text-[#1a3a22] leading-tight mb-4">
+              SmartStock Pro
+            </h2>
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <div className="h-px w-8 bg-slate-100" />
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">BASE VIERGE</p>
+              <div className="h-px w-8 bg-slate-100" />
+            </div>
+          </div>
 
-  const handleImportSuccess = (newProducts: Product[]) => {
-    setProducts(prev => [...prev, ...newProducts]);
-    const newLogs: InventoryLog[] = newProducts.map(p => ({
-      id: `log-${Date.now()}-${p.id}`,
-      date: new Date().toISOString(),
-      type: 'entry',
-      productId: p.id,
-      productName: p.name,
-      changeAmount: p.currentStock,
-      finalStock: p.currentStock,
-      reason: "Import Automatisé",
-      responsible: "Admin Pro"
-    }));
-    setHistory(prev => [...prev, ...newLogs]);
-    if (activeView === 'import') setActiveView('inventory');
-  };
+          <div className="space-y-6">
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+              <p className="text-[11px] font-bold text-slate-700 uppercase italic leading-relaxed text-center">
+                Aucune donnée n'est chargée. Vous partez d'une base complètement vierge.
+              </p>
+            </div>
 
-  const handleSaveProduct = () => {
-    if (!editingProduct) return;
-    const index = products.findIndex(p => p.id === editingProduct.id);
-    if (index >= 0) {
-      const updated = [...products];
-      updated[index] = editingProduct;
-      setProducts(updated);
-      showToast("Données mises à jour");
-    } else {
-      const newId = `p-${Date.now()}`;
-      setProducts(prev => [...prev, { ...editingProduct, id: newId }]);
-      showToast("Article enregistré");
-    }
-    setIsEditModalOpen(false);
-    setEditingProduct(null);
-  };
+            <button
+              onClick={() => {
+                // Créer un premier site par défaut pour démarrer
+                const firstSite: Site = {
+                  id: `SITE-${Date.now()}`,
+                  name: 'Site Principal',
+                  location: 'Siège',
+                  capacity: 1000,
+                  status: 'Opérationnel',
+                  manager: 'Administrateur'
+                };
+                setSites([firstSite]);
+                setNewProductData(prev => ({ ...prev, siteId: firstSite.id }));
+                setIsFirstLaunch(false);
+                setIsLoggedIn(true);
+                notify("Base de données initialisée avec un site par défaut.", "success");
+              }}
+              className="w-full bg-emerald-600 text-white py-7 rounded-[2.5rem] font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl hover:bg-emerald-700 transition-all active:scale-95 flex items-center justify-center gap-3"
+            >
+              <Database className="w-4 h-4" /> Initialiser mon espace
+            </button>
 
-  const handleSaveFurniture = () => {
-    if (!editingFurniture) return;
-    const index = furniture.findIndex(f => f.id === editingFurniture.id);
-    if (index >= 0) {
-      const updated = [...furniture];
-      updated[index] = editingFurniture;
-      setFurniture(updated);
-      showToast("Actif mis à jour");
-    } else {
-      setFurniture(prev => [...prev, editingFurniture]);
-      showToast("Actif enregistré");
-    }
-    setIsEditModalOpen(false);
-    setEditingFurniture(null);
-  };
-
-  const handleLogin = () => {
-    setIsLoggedIn(true);
-  };
-
-  const handleExportCSV = () => {
-    const headers = "ID,Nom,Categorie,Stock,Prix Unit.,Devise,Valo Totale (Fc)\n";
-    const rows = products.map(p => {
-      const priceInFc = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
-      return `${p.id},"${p.name}",${p.category},${p.currentStock},${p.unitPrice},${p.currency},${p.currentStock * priceInFc}`;
-    }).join("\n");
-    const blob = new Blob([headers + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `inventaire_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    showToast("Export CSV généré");
-  };
-
-  const handleExportAuditCSV = () => {
-    const headers = "Date,Heure,Article,Mouvement,Final,Responsable,Motif\n";
-    const rows = history.map(h => {
-      const d = new Date(h.date);
-      return `"${d.toLocaleDateString()}","${d.toLocaleTimeString()}","${h.productName}",${h.changeAmount},${h.finalStock},"${h.responsible || 'Admin'}","${h.reason || 'Std'}"`;
-    }).join("\n");
-    const blob = new Blob([headers + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `audit_complet_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    showToast("Rapport d'audit exporté");
-  };
-
-  if (!isLoggedIn) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-      <div className="bg-white p-24 rounded-[5rem] shadow-2xl text-center space-y-16 animate-fade-in border border-slate-100">
-        <div className="inline-flex p-12 bg-[#143d21] rounded-[4rem] text-white shadow-3xl animate-bounce-slow">
-          <ShieldCheck className="w-20 h-20" />
+            <div className="mt-8 pt-6 border-t border-slate-50">
+              <p className="text-[9px] text-slate-400 text-center uppercase tracking-widest">
+                Vous pourrez créer vos propres sites, produits,<br />mobilier et fournisseurs.
+              </p>
+              <p className="text-[11px] font-header italic text-slate-400 text-center mt-6">
+                By <span className="text-[#1a3a22]">Bereckya MAYELE</span> logistics
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="space-y-4">
-          <h2 className="text-8xl font-black italic uppercase tracking-tighter text-slate-900 leading-none">SmartStock</h2>
-          <p className="text-[12px] font-black text-emerald-600 uppercase tracking-[0.5em] italic">Enterprise Algorithm v4.5</p>
-        </div>
-        <div className="space-y-6">
-          <button onClick={handleLogin} className="w-full py-10 bg-[#143d21] text-white rounded-[4rem] font-black uppercase text-sm tracking-widest shadow-2xl hover:bg-black transition-all">Accéder au Système</button>
-        </div>
+        
+        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (!isLoggedIn) return <LoginView enterpriseName={settings.enterpriseName} onLogin={() => { setIsLoggedIn(true); notify("Bienvenue sur SmartStock Pro"); }} />;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex">
-      <aside className="fixed inset-y-0 left-0 z-50 w-80 bg-[#143d21] m-6 rounded-[3.5rem] p-10 flex flex-col text-white shadow-2xl no-print">
-        <div className="mb-14 px-4 py-2 border-b border-white/5 pb-10 flex items-center gap-4">
-          <ShieldCheck className="w-8 h-8 text-emerald-400" />
-          <h1 className="text-2xl font-black italic uppercase tracking-tighter">SmartStock</h1>
+    <div className="min-h-screen flex bg-[#f8fafc]">
+      <div className="fixed top-8 right-8 z-[1000] flex flex-col gap-3 pointer-events-none">
+        {notifications.map(n => (
+          <div key={n.id} className={`flex items-center gap-4 px-6 py-4 rounded-3xl shadow-2xl animate-slide-in pointer-events-auto border ${
+            n.type === 'success' ? 'bg-[#1a3a22] text-white border-emerald-500/30' : 
+            n.type === 'error' ? 'bg-rose-600 text-white border-rose-400/30' : 
+            'bg-slate-900 text-white border-slate-700'
+          }`}>
+            {n.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : 
+             n.type === 'error' ? <AlertCircle className="w-5 h-5 text-rose-200" /> : 
+             <Info className="w-5 h-5 text-blue-400" />}
+            <p className="text-[11px] font-black uppercase italic tracking-wider">{n.message}</p>
+          </div>
+        ))}
+      </div>
+
+      <aside className="sidebar-float no-print">
+        <div className="flex items-center gap-3 mb-8 px-2">
+          <Activity className="w-10 h-10 text-emerald-400" />
+          <h1 className="text-white text-lg font-black italic uppercase leading-none">SmartStock</h1>
         </div>
-        <div className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
-          <NavItem active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} icon={LayoutDashboard} label="Tableau de bord" />
-          <NavItem active={activeView === 'inventory'} onClick={() => setActiveView('inventory')} icon={Box} label="Stocks / Inventaire" />
-          <NavItem active={activeView === 'furniture'} onClick={() => setActiveView('furniture')} icon={Armchair} label="Mobilier & Actifs" />
-          <NavItem active={activeView === 'import'} onClick={() => setActiveView('import')} icon={FileSpreadsheet} label="Import Automatisé" />
-          <NavItem active={activeView === 'history'} onClick={() => setActiveView('history')} icon={HistoryIcon} label="Historique / Audit" />
-          <NavItem active={activeView === 'monthly_report'} onClick={() => setActiveView('monthly_report')} icon={FileText} label="Reporting Statistique" />
-          <NavItem active={activeView === 'settings'} onClick={() => setActiveView('settings')} icon={SettingsIcon} label="Paramètres" />
+
+        <div className="relative mb-6 px-1" ref={searchRef}>
+          <div className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl border transition-all duration-300 ${
+            isSearchFocused ? 'bg-white border-white' : 'bg-white/5 border-white/10'
+          }`}>
+            <Search className={`w-4 h-4 ${isSearchFocused ? 'text-[#1a3a22]' : 'text-slate-500'}`} />
+            <input 
+              type="text" 
+              placeholder="Recherche globale..." 
+              value={globalSearch}
+              onChange={(e) => { setGlobalSearch(e.target.value); setIsSearchFocused(true); }}
+              onFocus={() => setIsSearchFocused(true)}
+              className={`bg-transparent border-none outline-none text-[10px] font-bold uppercase tracking-wider w-full ${
+                isSearchFocused ? 'text-[#1a3a22] placeholder:text-slate-400' : 'text-white placeholder:text-slate-500'
+              }`}
+            />
+            {!isSearchFocused && <Command className="w-3 h-3 text-slate-600" />}
+          </div>
+
+          {isSearchFocused && globalSearchResults && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-3xl shadow-2xl border border-slate-100 p-4 z-[200] max-h-[400px] overflow-y-auto animate-fade-in">
+              {globalSearchResults.products.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-2 px-2">Produits</p>
+                  {globalSearchResults.products.map(p => (
+                    <button key={p.id} onClick={() => handleSearchResultClick('inventory')} className="w-full text-left p-2.5 rounded-xl hover:bg-slate-50 flex items-center justify-between group transition-colors">
+                      <div className="flex items-center gap-3">
+                        <Box className="w-3 h-3 text-emerald-500" />
+                        <span className="text-[9px] font-bold uppercase text-slate-700">{p.name}</span>
+                      </div>
+                      <span className="text-[8px] font-black text-slate-300">{p.currentStock} {p.unit}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {globalSearchResults.sites.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-2 px-2">Sites</p>
+                  {globalSearchResults.sites.map(s => (
+                    <button key={s.id} onClick={() => handleSearchResultClick('sites')} className="w-full text-left p-2.5 rounded-xl hover:bg-slate-50 flex items-center gap-3 group transition-colors">
+                      <MapPin className="w-3 h-3 text-indigo-500" />
+                      <span className="text-[9px] font-bold uppercase text-slate-700">{s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {globalSearchResults.tasks.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-2 px-2">Tâches</p>
+                  {globalSearchResults.tasks.map(t => (
+                    <button key={t.id} onClick={() => handleSearchResultClick('tasks')} className="w-full text-left p-2.5 rounded-xl hover:bg-slate-50 flex items-center gap-3 group transition-colors">
+                      <CheckSquare className="w-3 h-3 text-amber-500" />
+                      <span className="text-[9px] font-bold uppercase text-slate-700">{t.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {globalSearchResults.suppliers.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-2 px-2">Fournisseurs</p>
+                  {globalSearchResults.suppliers.map(s => (
+                    <button key={s.id} onClick={() => handleSearchResultClick('suppliers')} className="w-full text-left p-2.5 rounded-xl hover:bg-slate-50 flex items-center gap-3 group transition-colors">
+                      <Truck className="w-3 h-3 text-blue-500" />
+                      <span className="text-[9px] font-bold uppercase text-slate-700">{s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!globalSearchResults.products.length && !globalSearchResults.sites.length && !globalSearchResults.tasks.length && !globalSearchResults.suppliers.length && (
+                <p className="text-[10px] font-bold text-slate-400 text-center py-4 uppercase">Aucun résultat trouvé</p>
+              )}
+            </div>
+          )}
         </div>
-        <button onClick={() => setIsLoggedIn(false)} className="mt-12 flex items-center justify-center gap-3 py-6 bg-white/5 hover:bg-rose-600 text-white/50 hover:text-white rounded-[2rem] font-black uppercase text-[10px] tracking-widest transition-all">
-          <LogOut className="w-4 h-4" /> Fermer la Session
+
+        <nav className="flex-1 space-y-0.5 overflow-y-auto pr-1">
+          <NavItem active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} icon={LayoutDashboard} label="Tableau de Bord" />
+          <NavItem active={activeView === 'inventory'} onClick={() => setActiveView('inventory')} icon={Box} label="Inventaire" />
+          <NavItem active={activeView === 'movements'} onClick={() => setActiveView('movements')} icon={ArrowLeftRight} label="Entrées & Sorties" />
+          <NavItem active={activeView === 'furniture'} onClick={() => setActiveView('furniture')} icon={Lamp} label="Inventaire Mobilier" />
+          <NavItem active={activeView === 'sites'} onClick={() => setActiveView('sites')} icon={MapPin} label="Gestion Sites" />
+          <NavItem active={activeView === 'suppliers'} onClick={() => setActiveView('suppliers')} icon={Truck} label="Fournisseurs" />
+          <NavItem active={activeView === 'audit_session'} onClick={() => setActiveView('audit_session')} icon={RefreshCw} label="Audit / Écarts" />
+          <NavItem active={activeView === 'traceability'} onClick={() => setActiveView('traceability')} icon={HistoryIcon} label="Historique Complet" />
+          <NavItem active={activeView === 'tasks'} onClick={() => setActiveView('tasks')} icon={CheckSquare} label="Agenda Tâches" alertCount={tasks.filter(t => t.status === 'En attente').length} />
+          <NavItem active={activeView === 'needs_list'} onClick={() => setActiveView('needs_list')} icon={ListChecks} label="État de Besoins" />
+          <NavItem active={activeView === 'analytics'} onClick={() => setActiveView('analytics')} icon={FileBarChart} label="Analyses Automatiques" />
+          <NavItem active={activeView === 'settings'} onClick={() => setActiveView('settings')} icon={Settings} label="Paramètres" />
+        </nav>
+        <button onClick={() => setIsLogoutModalOpen(true)} className="mt-6 w-full flex items-center gap-4 px-6 py-4 rounded-2xl bg-white/5 text-slate-400 font-bold text-[10px] uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all group">
+          <LogOut className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" /> Déconnexion
         </button>
       </aside>
 
-      <main className="flex-1 p-14 lg:ml-80">
-        <header className="flex justify-between items-end mb-16 no-print">
-          <div className="space-y-4">
-            <h2 className="text-7xl font-black text-slate-900 italic uppercase tracking-tighter leading-none">{viewLabels[activeView]}</h2>
-            <div className="flex items-center gap-3">
-              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic leading-none">Moteur algorithmique opérationnel</p>
-            </div>
+      <main className="flex-1 ml-[300px] p-12 pr-16">
+        <header className="mb-12 flex justify-between items-end no-print">
+          <div>
+             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">{settings.enterpriseName}</p>
+             <h2 className="text-[52px] font-header text-slate-900 leading-none italic uppercase">
+               {getViewTitle(activeView)}
+             </h2>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 bg-white px-5 py-3 rounded-2xl border border-slate-100 shadow-sm text-[9px] font-black text-slate-600 uppercase tracking-widest leading-none">
-              <Coins className="w-4 h-4 text-amber-600" /> Taux: {exchangeRate}
-            </div>
-            <button onClick={() => window.print()} className="p-4 bg-white border border-slate-100 rounded-2xl text-slate-500 hover:text-[#143d21] shadow-sm"><Printer className="w-5 h-5" /></button>
-            <div className="flex items-center gap-4 bg-white border border-slate-100 pr-8 p-1.5 rounded-full shadow-sm">
-              <div className="w-12 h-12 bg-[#143d21] rounded-full flex items-center justify-center text-white text-xs font-black">AD</div>
-              <div>
-                <p className="text-[11px] font-black text-slate-900 uppercase leading-none mb-1">Admin ERP</p>
-                <p className="text-[8px] font-black text-emerald-500 uppercase leading-none">Superviseur Pro</p>
-              </div>
-            </div>
+          <div className="flex items-center gap-4">
+             <div className="bg-white px-4 py-2 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-2">
+                <Globe className="w-3 h-3 text-emerald-500" /><span className="text-[9px] font-black uppercase">{settings.locationId}</span>
+             </div>
+             <div className="bg-white pr-4 pl-2 py-2 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+                <div className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-[10px] italic">AD</div>
+                <p className="text-[8px] font-black uppercase">Admin ERP</p>
+             </div>
           </div>
         </header>
 
-        <div className="pb-32">
-          {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} setActiveView={setActiveView} exchangeRate={exchangeRate} />}
-          {activeView === 'inventory' && <InventoryView products={products} searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleExport={handleExportCSV} setIsEditModalOpen={setIsEditModalOpen} setEditingProduct={setEditingProduct} exchangeRate={exchangeRate} onImportSuccess={handleImportSuccess} showToast={showToast} />}
-          {activeView === 'furniture' && <FurnitureView furniture={furniture} searchTerm={searchTerm} setSearchTerm={setSearchTerm} setIsEditModalOpen={setIsEditModalOpen} setEditingFurniture={setEditingFurniture} />}
-          {activeView === 'history' && <HistoryView history={history} searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleExport={handleExportAuditCSV} />}
-          {activeView === 'monthly_report' && <ReportingView products={products} history={history} exchangeRate={exchangeRate} />}
-          {activeView === 'import' && <ImportView onImportSuccess={handleImportSuccess} showToast={showToast} />}
-          {activeView === 'settings' && <SettingsView exchangeRate={exchangeRate} setExchangeRate={setExchangeRate} />}
-        </div>
-      </main>
+        <section>
+           {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setActiveView} />}
+           {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={(p, t) => setMovementModal({isOpen: true, type: t, product: p})} onEdit={(p) => setEditModal({isOpen: true, product: p})} onImport={handleImportCSV} onAdd={() => setIsAddModalOpen(true)} onDelete={handleDeleteProduct} />}
+           {activeView === 'movements' && <MovementsView products={products} sites={sites} history={history} onTransaction={handleTransaction} />}
+           {activeView === 'furniture' && <FurnitureView furniture={furniture} setFurniture={setFurniture} furnitureAudits={furnitureAudits} setFurnitureAudits={setFurnitureAudits} sites={sites} notify={notify} />}
+           {activeView === 'sites' && <SitesView sites={sites} setSites={(s) => { setSites(s); notify("Structure réseau mise à jour."); }} products={products} onCopyData={handleCopySiteProducts} onImportCSV={handleImportCSV} />}
+           {activeView === 'suppliers' && <SuppliersView suppliers={suppliers} setSuppliers={setSuppliers} notify={notify} />}
+           {activeView === 'audit_session' && <AuditView products={products} sites={sites} exchangeRate={settings.exchangeRate} onUpdateStock={handleTransaction} notify={notify} />}
+           {activeView === 'traceability' && <GlobalHistoryView history={history} needsHistory={needsHistory} furnitureAudits={furnitureAudits} sites={sites} products={products} settings={settings} />}
+           {activeView === 'tasks' && <TasksView tasks={tasks} setTasks={(t) => { setTasks(t); }} notify={notify} />}
+           {activeView === 'needs_list' && 
+             <NeedsReportView 
+               products={products} 
+               settings={settings} 
+               needsHistory={needsHistory}
+               onSaveReport={(rep) => { setNeedsHistory([rep, ...needsHistory]); notify(`État de besoin ${rep.id} enregistré.`); }}
+               onDeleteReport={(id) => { setNeedsHistory(needsHistory.filter(r => r.id !== id)); notify("Rapport supprimé des archives.", "error"); }}
+               sites={sites}
+             />
+           }
+           {activeView === 'analytics' && <AnalyticsView products={products} history={history} exchangeRate={settings.exchangeRate} sites={sites} />}
+           {activeView === 'settings' && <SettingsView settings={settings} onUpdateSettings={(s) => { setSettings(s); notify("Paramètres système mis à jour."); }} onResetSystem={handleResetSystem} />}
+        </section>
 
-      {/* Product Edit Modal */}
-      {isEditModalOpen && activeView === 'inventory' && (
-        <Modal 
-          title={editingProduct ? "Modifier" : "Ajouter"} 
-          onClose={() => setIsEditModalOpen(false)} 
-          onSave={handleSaveProduct}
-        >
-          <div className="grid grid-cols-2 gap-8">
-            <Field label="Désignation" value={editingProduct?.name || ''} onChange={(v:any) => setEditingProduct({...(editingProduct || { id: '', currentStock: 0, minStock: 5, unitPrice: 0, unit: 'pces', currency: 'Fc', category: 'Matériel', siteId: 'S1', lastInventoryDate: new Date().toISOString() } as any), name: v})} />
-            <Field label="Catégorie" value={editingProduct?.category || 'Matériel'} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), category: v})} type="select" options={INITIAL_CATEGORIES} />
-            <Field label="Stock Disponible" value={editingProduct?.currentStock || 0} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), currentStock: parseInt(v) || 0})} type="number" />
-            <Field label="Seuil d'Alerte" value={editingProduct?.minStock || 5} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), minStock: parseInt(v) || 5})} type="number" />
-            <Field label="Prix Unitaire" value={editingProduct?.unitPrice || 0} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), unitPrice: parseFloat(v) || 0})} type="number" />
-            <Field label="Devise" value={editingProduct?.currency || 'Fc'} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), currency: v})} type="select" options={['Fc', '$']} />
-            <Field label="Unité" value={editingProduct?.unit || 'pces'} onChange={(v:any) => setEditingProduct({...(editingProduct || {} as any), unit: v})} type="select" options={['pces', 'kg', 'L', 'bidons', 'paquets', 'mètres']} />
-            
-            <div className="col-span-2 p-8 bg-emerald-50/50 rounded-3xl border border-emerald-100 flex justify-between items-center">
-               <div>
-                 <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">Valorisation (Fc)</p>
-                 <h4 className="text-3xl font-black italic text-emerald-800 tabular-nums leading-none">
-                   {((editingProduct?.currentStock || 0) * (editingProduct?.currency === '$' ? (editingProduct?.unitPrice || 0) * exchangeRate : (editingProduct?.unitPrice || 0))).toLocaleString()} Fc
-                 </h4>
-               </div>
-               <div className="text-right">
-                 <Badge status={editingProduct?.currentStock === 0 ? 'CRITIQUE' : (editingProduct?.currentStock && editingProduct?.minStock && editingProduct.currentStock <= editingProduct.minStock ? 'RÉAPPRO' : 'OPTIMAL')} />
-               </div>
+        {isLogoutModalOpen && (
+          <div className="fixed inset-0 z-[1100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md animate-fade-in no-print">
+            <div className="bg-white w-full max-w-md rounded-[3.5rem] shadow-2xl p-12 text-center space-y-8 animate-slide-up border border-white/20">
+              <div className="w-24 h-24 bg-rose-50 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-inner relative">
+                <LogOut className="w-10 h-10 text-rose-500" />
+                <div className="absolute top-0 right-0 p-2 bg-rose-500 rounded-full border-4 border-white">
+                  <AlertTriangle className="w-3 h-3 text-white" />
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <h3 className="text-3xl font-header italic uppercase text-slate-900">Déconnexion</h3>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                  Êtes-vous sûr de vouloir quitter la plateforme ?
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <button 
+                  onClick={handleLogout}
+                  className="w-full bg-rose-600 text-white py-6 rounded-3xl font-black text-[12px] uppercase tracking-[0.2em] shadow-xl hover:bg-rose-700 hover:-translate-y-1 transition-all"
+                >
+                  Confirmer la déconnexion
+                </button>
+                <button 
+                  onClick={() => setIsLogoutModalOpen(false)}
+                  className="w-full bg-slate-100 text-slate-500 py-6 rounded-3xl font-black text-[12px] uppercase tracking-[0.2em] hover:bg-slate-200 transition-all"
+                >
+                  Annuler
+                </button>
+              </div>
+              
+              <div className="pt-4 border-t border-slate-50">
+                <p className="text-[9px] font-black text-slate-300 uppercase italic">SmartStock Pro Edition Entreprise</p>
+              </div>
             </div>
           </div>
-        </Modal>
+        )}
+      </main>
+
+      {/* MODAL AJOUT PRODUIT */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
+          <form onSubmit={handleAddProduct} className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-12 space-y-8 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center">
+              <h3 className="text-3xl font-header italic uppercase">Nouveau Produit</h3>
+              <button type="button" onClick={() => setIsAddModalOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-6">
+              <div className="col-span-2 space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Nom du produit</label>
+                <input 
+                  required 
+                  type="text" 
+                  value={newProductData.name} 
+                  onChange={(e) => setNewProductData({...newProductData, name: e.target.value})} 
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Catégorie</label>
+                <select 
+                  value={newProductData.category} 
+                  onChange={(e) => setNewProductData({...newProductData, category: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
+                >
+                  {INITIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Unité</label>
+                <select 
+                  value={newProductData.unit} 
+                  onChange={(e) => setNewProductData({...newProductData, unit: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
+                >
+                  {settings.units.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Site</label>
+                <select 
+                  value={newProductData.siteId} 
+                  onChange={(e) => setNewProductData({...newProductData, siteId: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
+                  disabled={sites.length === 0}
+                >
+                  {sites.length === 0 ? (
+                    <option value="">Aucun site - Créez-en un d'abord</option>
+                  ) : (
+                    sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                  )}
+                </select>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Prix unitaire</label>
+                <input 
+                  required 
+                  type="number" 
+                  step="0.01"
+                  value={newProductData.unitPrice} 
+                  onChange={(e) => setNewProductData({...newProductData, unitPrice: Number(e.target.value)})} 
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Devise</label>
+                <select 
+                  value={newProductData.currency} 
+                  onChange={(e) => setNewProductData({...newProductData, currency: e.target.value as 'Fc' | '$'})}
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
+                >
+                  <option value="Fc">FC</option>
+                  <option value="$">USD</option>
+                </select>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Stock initial</label>
+                <input 
+                  type="number" 
+                  value={newProductData.initialStock} 
+                  onChange={(e) => setNewProductData({...newProductData, initialStock: Number(e.target.value)})} 
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Stock minimum</label>
+                <input 
+                  required 
+                  type="number" 
+                  value={newProductData.minStock} 
+                  onChange={(e) => setNewProductData({...newProductData, minStock: Number(e.target.value)})} 
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                />
+              </div>
+            </div>
+
+            <button 
+              type="submit" 
+              disabled={sites.length === 0}
+              className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-black text-[12px] uppercase shadow-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-3 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Save className="w-5 h-5" /> Enregistrer le produit
+            </button>
+            
+            {sites.length === 0 && (
+              <p className="text-[9px] font-black text-rose-500 text-center">
+                ⚠️ Vous devez d'abord créer un site dans "Gestion Sites"
+              </p>
+            )}
+          </form>
+        </div>
       )}
 
-      {/* Furniture Edit Modal */}
-      {isEditModalOpen && activeView === 'furniture' && (
-        <Modal 
-          title="Actif Immobilisé" 
-          onClose={() => setIsEditModalOpen(false)} 
-          onSave={handleSaveFurniture}
-        >
-          <div className="grid grid-cols-2 gap-10">
-            <Field label="Désignation" value={editingFurniture?.name || ''} onChange={(v:any) => setEditingFurniture({...(editingFurniture || { id: `${Date.now()}`, code: `INV-${Date.now()}` } as any), name: v})} />
-            <Field label="Code Inventaire" value={editingFurniture?.code || ''} onChange={(v:any) => setEditingFurniture({...(editingFurniture || {} as any), code: v})} />
-            <Field label="Affectation" value={editingFurniture?.assignedTo || ''} onChange={(v:any) => setEditingFurniture({...(editingFurniture || {} as any), assignedTo: v})} />
-            <Field label="État" value={editingFurniture?.condition || 'Bon'} onChange={(v:any) => setEditingFurniture({...(editingFurniture || {} as any), condition: v})} type="select" options={['Neuf', 'Bon', 'Usé', 'Endommagé']} />
-            <Field label="Valeur" value={editingFurniture?.purchasePrice || 0} onChange={(v:any) => setEditingFurniture({...(editingFurniture || {} as any), purchasePrice: parseInt(v) || 0})} type="number" />
-            <Field label="Quantité" value={editingFurniture?.currentCount || 1} onChange={(v:any) => setEditingFurniture({...(editingFurniture || {} as any), currentCount: parseInt(v) || 1})} type="number" />
+      {/* MODAL MOUVEMENT */}
+      {movementModal.isOpen && movementModal.product && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
+          <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl p-12 space-y-8">
+            <div className="flex justify-between items-center">
+              <h3 className="text-2xl font-header italic uppercase">
+                {movementModal.type === 'entry' ? 'Entrée de stock' : 'Sortie de stock'}
+              </h3>
+              <button type="button" onClick={() => setMovementModal({isOpen: false, type: 'entry', product: null})} className="p-2 bg-slate-100 rounded-full"><X className="w-4 h-4" /></button>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Produit</p>
+                <p className="text-xl font-header italic text-slate-900">{movementModal.product.name}</p>
+                <p className="text-[9px] font-bold text-slate-400 mt-1">Stock actuel : {movementModal.product.currentStock} {movementModal.product.unit}</p>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Quantité</label>
+                <input 
+                  id="movementQty"
+                  type="number" 
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-3xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                  placeholder="0"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Motif / Référence</label>
+                <input 
+                  id="movementReason"
+                  type="text" 
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-bold italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                  placeholder={movementModal.type === 'entry' ? "Facture, BL, Retour..." : "Consommation, Livraison..."}
+                />
+              </div>
+              
+              <button 
+                onClick={() => {
+                  const qty = (document.getElementById('movementQty') as HTMLInputElement)?.value;
+                  const reason = (document.getElementById('movementReason') as HTMLInputElement)?.value;
+                  if (!qty || Number(qty) <= 0) {
+                    notify("Veuillez saisir une quantité valide", "error");
+                    return;
+                  }
+                  const amount = movementModal.type === 'entry' ? Number(qty) : -Number(qty);
+                  handleTransaction(movementModal.product!.id, amount, reason || (movementModal.type === 'entry' ? 'Entrée manuelle' : 'Sortie manuelle'), movementModal.type);
+                }}
+                className={`w-full py-6 rounded-3xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all ${
+                  movementModal.type === 'entry' 
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                    : 'bg-rose-600 hover:bg-rose-700 text-white'
+                }`}
+              >
+                Confirmer la {movementModal.type === 'entry' ? 'réception' : 'sortie'}
+              </button>
+            </div>
           </div>
-        </Modal>
+        </div>
       )}
 
-      {notification && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 px-12 py-8 bg-white border-2 border-emerald-100 rounded-[3rem] shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom-10 z-[300]">
-          <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-          <p className="text-sm font-black uppercase italic text-slate-700 tracking-widest">{notification.message}</p>
+      {/* MODAL ÉDITION PRODUIT */}
+      {editModal.isOpen && editModal.product && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
+          <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-12 space-y-8">
+            <div className="flex justify-between items-center">
+              <h3 className="text-3xl font-header italic uppercase">Modifier Produit</h3>
+              <button type="button" onClick={() => setEditModal({isOpen: false, product: null})} className="p-2 bg-slate-100 rounded-full"><X className="w-4 h-4" /></button>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Nom du produit</label>
+                <input 
+                  id="editName"
+                  type="text" 
+                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                  defaultValue={editModal.product.name}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Stock minimum</label>
+                  <input 
+                    id="editMinStock"
+                    type="number" 
+                    className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                    defaultValue={editModal.product.minStock}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Prix unitaire</label>
+                  <input 
+                    id="editPrice"
+                    type="number" 
+                    step="0.01"
+                    className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                    defaultValue={editModal.product.unitPrice}
+                  />
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  const name = (document.getElementById('editName') as HTMLInputElement)?.value;
+                  const minStock = Number((document.getElementById('editMinStock') as HTMLInputElement)?.value);
+                  const price = Number((document.getElementById('editPrice') as HTMLInputElement)?.value);
+                  
+                  if (!name || !minStock || !price) {
+                    notify("Veuillez remplir tous les champs", "error");
+                    return;
+                  }
+                  
+                  handleUpdateProduct({
+                    ...editModal.product!,
+                    name,
+                    minStock,
+                    unitPrice: price
+                  });
+                }}
+                className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-black text-[12px] uppercase shadow-xl hover:bg-emerald-700 transition-all"
+              >
+                Mettre à jour
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
-};
-
-const Modal = ({ title, children, onClose, onSave }: any) => (
-  <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in">
-    <div className="bg-white w-full max-w-2xl rounded-[4rem] p-16 space-y-12 shadow-2xl relative">
-      <button onClick={onClose} className="absolute top-12 right-12 p-4 text-slate-400 hover:text-rose-500 transition-colors"><X className="w-10 h-10" /></button>
-      <h3 className="text-5xl font-black italic uppercase tracking-tighter text-slate-900 leading-none">{title}</h3>
-      {children}
-      <button onClick={onSave} className="w-full py-10 bg-[#143d21] text-white rounded-[3rem] font-black uppercase text-xs tracking-widest shadow-2xl transition-all hover:bg-black">Confirmer</button>
-    </div>
-  </div>
-);
-
-const Field = ({ label, value, onChange, type = "text", options = [] }: any) => (
-  <div className="space-y-3">
-    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none ml-2">{label}</p>
-    {type === 'select' ? (
-      <select value={value} onChange={e => onChange(e.target.value)} className="w-full p-6 bg-slate-50 border-none rounded-3xl font-bold text-slate-800 outline-none cursor-pointer focus:ring-2 ring-emerald-500/10">
-        {options.map((o:any) => <option key={o} value={o}>{o}</option>)}
-      </select>
-    ) : (
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} className="w-full p-6 bg-slate-50 border-none rounded-3xl font-bold text-slate-800 outline-none focus:ring-2 ring-emerald-500/10" />
-    )}
-  </div>
-);
-
-const SettingsView = ({ exchangeRate, setExchangeRate }: any) => (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 animate-fade-in">
-    <div className="lg:col-span-2 space-y-8">
-      <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="flex items-center gap-10 mb-12">
-           <div className="w-24 h-24 bg-emerald-50 rounded-[2.5rem] flex items-center justify-center text-emerald-700 border border-emerald-100">
-             <User className="w-12 h-12" />
-           </div>
-           <div>
-             <h3 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900 mb-2">Profil Administrateur</h3>
-             <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest italic">Configuration globale du système</p>
-           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-10">
-          <div className="space-y-3"><p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Identifiant</p><div className="p-6 bg-slate-50 rounded-2xl font-black italic text-slate-900">Admin_Pro_DRC</div></div>
-          <div className="space-y-3"><p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Email Audit</p><div className="p-6 bg-slate-50 rounded-2xl font-black italic text-slate-900">audit@smartstock.local</div></div>
-        </div>
-      </div>
-
-      <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="flex items-center gap-6 mb-10">
-          <Coins className="w-10 h-10 text-amber-500" />
-          <div>
-            <h3 className="text-2xl font-black italic uppercase tracking-tighter text-slate-900 leading-none mb-2">Taux de Change Global</h3>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Conversion algorithmique des devises</p>
-          </div>
-        </div>
-        <div className="max-w-xs space-y-6">
-          <div className="space-y-3">
-             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none ml-2">Taux: 1 $ = ? Fc</p>
-             <div className="relative group">
-               <input 
-                 type="number" 
-                 value={exchangeRate}
-                 onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 0)}
-                 className="w-full p-8 bg-slate-50 border-none rounded-[2rem] font-black text-2xl text-slate-900 outline-none tabular-nums focus:ring-2 ring-[#143d21]/10 transition-all"
-               />
-               <span className="absolute right-8 top-1/2 -translate-y-1/2 font-black text-slate-300 italic">Fc</span>
-             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div className="space-y-8">
-       <div className="bg-[#143d21] p-12 rounded-[3.5rem] text-white shadow-2xl space-y-10">
-          <div className="flex items-center gap-4"><Shield className="w-8 h-8 text-emerald-400" /><h4 className="text-xl font-black italic uppercase tracking-tighter leading-none">Système Local</h4></div>
-          <div className="space-y-8">
-            <Toggle label="Base de données locale" sub="Stockage navigateur persistant" active />
-            <Toggle label="Algorithmes déterministes" sub="Pas de traitement Cloud" active />
-            <Toggle label="Chiffrement session" sub="Sécurité des registres active" active />
-          </div>
-       </div>
-    </div>
-  </div>
-);
-
-const Toggle = ({ label, sub, active }: any) => (
-  <div className="flex items-center justify-between group">
-    <div>
-      <h6 className="text-[11px] font-black uppercase tracking-tight italic mb-1">{label}</h6>
-      <p className="text-[8px] font-bold text-emerald-100/80 uppercase italic leading-none">{sub}</p>
-    </div>
-    <div className={`w-12 h-6 rounded-full p-1 relative transition-colors ${active ? 'bg-emerald-500' : 'bg-white/10'}`}>
-      <div className={`w-4 h-4 bg-white rounded-full transition-transform ${active ? 'translate-x-6' : 'translate-x-0'}`} />
-    </div>
-  </div>
-);
-
-const viewLabels: Record<ViewType, string> = {
-  dashboard: 'Tableau de bord', inventory: 'Stocks / Inventaire', furniture: 'Mobilier & Actifs', replenishment: 'Réappro', history: 'Historique / Audit', suppliers: 'Fournisseurs', sites: 'Sites', analytics: 'BI', forecasting: 'Prévisions', monthly_report: 'Reporting Statistique', import: 'Import Automatisé', settings: 'Paramètres Système'
-};
-
-export default App;
+}

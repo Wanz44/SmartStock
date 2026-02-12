@@ -1,66 +1,107 @@
 
-import { Product, InventoryLog, RapportAutomatique } from "../types";
+import { Product, InventoryLog, RapportAutomatique, Site } from "../types";
 
-/**
- * Génère un rapport d'audit logistique basé sur des algorithmes statistiques.
- * Remplace l'ancien moteur IA par une analyse de données déterministe.
- */
-export const getAutomatedReport = async (products: Product[], history: InventoryLog[], exchangeRate: number): Promise<RapportAutomatique> => {
-  const totalValue = products.reduce((acc, p) => {
-    const price = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
-    return acc + (p.currentStock * price);
-  }, 0);
+export const getAutomatedReport = async (products: Product[], history: InventoryLog[], exchangeRate: number, sites: Site[]): Promise<RapportAutomatique> => {
+  const now = new Date();
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(now.getDate() - 90);
 
-  const criticalItems = products.filter(p => p.currentStock <= p.minStock);
-  const outOfStock = products.filter(p => p.currentStock === 0);
-  
-  // Analyse par catégorie pour le graphique
+  // 1. Valeur actuelle par catégorie & site
   const categoryData: Record<string, number> = {};
+  const siteValueData: Record<string, number> = {};
+  
   products.forEach(p => {
-    const price = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
-    categoryData[p.category] = (categoryData[p.category] || 0) + (p.currentStock * price);
+    const priceFc = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
+    const value = p.currentStock * priceFc;
+    
+    categoryData[p.category] = (categoryData[p.category] || 0) + value;
+    const siteName = sites.find(s => s.id === p.siteId)?.name || 'Inconnu';
+    siteValueData[siteName] = (siteValueData[siteName] || 0) + value;
   });
 
-  const chartData = Object.entries(categoryData).map(([label, valeur]) => ({ label, valeur }));
+  // 2. Dépenses (sorties) par mois, site et produit
+  const monthlyExpenses: Record<string, number> = {};
+  const siteExpenses: Record<string, number> = {};
+  const productConsumption: Record<string, number> = {};
 
-  // Génération des recommandations par règles métier
-  const recommendations = [
-    "Optimiser les cycles de commande pour les articles en zone critique.",
-    "Réviser les stocks de sécurité basés sur la consommation des 30 derniers jours.",
-    "Vérifier l'intégrité physique du mobilier pour les actifs marqués 'Usés'.",
-    `Ajuster les prix de vente suite à la mise à jour du taux (actuellement ${exchangeRate} Fc).`
-  ];
+  history.forEach(h => {
+    const hDate = new Date(h.date);
+    if (hDate >= ninetyDaysAgo && (h.type === 'exit' || (h.type === 'adjustment' && h.changeAmount < 0))) {
+      const product = products.find(p => p.id === h.productId);
+      const priceFc = product ? (product.currency === '$' ? product.unitPrice * exchangeRate : product.unitPrice) : 0;
+      const expenseValue = Math.abs(h.changeAmount) * priceFc;
+      const volume = Math.abs(h.changeAmount);
 
-  // Construction du résumé automatique
-  const summary = `L'audit actuel identifie ${products.length} références actives pour une valeur totale de ${totalValue.toLocaleString()} Fc. Le système détecte ${criticalItems.length} alertes de réapprovisionnement dont ${outOfStock.length} ruptures sèches nécessitant une action immédiate.`;
+      // Par mois
+      const monthKey = hDate.toLocaleString('fr-FR', { month: 'short', year: '2-digit' });
+      monthlyExpenses[monthKey] = (monthlyExpenses[monthKey] || 0) + expenseValue;
 
-  return {
-    summary,
-    criticalAlerts: criticalItems.map(p => `Alerte Seuil : ${p.name} (${p.currentStock} ${p.unit} restants)`),
-    recommendations,
-    financialProjection: `Basé sur les flux, une provision de ${(totalValue * 0.15).toLocaleString()} Fc est recommandée pour le prochain cycle de réapprovisionnement.`,
-    chartData,
-    generatedAt: new Date().toISOString()
-  };
-};
+      // Par site
+      const siteName = sites.find(s => s.id === h.siteId)?.name || 'Inconnu';
+      siteExpenses[siteName] = (siteExpenses[siteName] || 0) + expenseValue;
 
-/**
- * Parseur de données pour l'importation automatique.
- * Analyse les chaînes de caractères (CSV/TSV) pour extraire les données d'inventaire.
- */
-export const parseInventoryData = (text: string): Partial<Product>[] => {
-  const lines = text.split('\n').filter(l => l.trim().length > 0);
-  if (lines.length < 2) return [];
+      // Par produit (Volume)
+      productConsumption[h.productName] = (productConsumption[h.productName] || 0) + volume;
+    }
+  });
 
-  return lines.map(line => {
-    const parts = line.split(/[;,\t]/);
+  // 3. Indicateurs de santé par site
+  const healthIndicators = sites.map(site => {
+    const siteProds = products.filter(p => p.siteId === site.id);
+    if (siteProds.length === 0) return { siteName: site.name, status: 'green' as const, score: 100 };
+    
+    const criticals = siteProds.filter(p => p.currentStock <= p.minStock).length;
+    const healthScore = Math.max(0, 100 - (criticals / siteProds.length) * 100);
+    
     return {
-      name: parts[0]?.trim() || "Article Sans Nom",
-      currentStock: parseInt(parts[1]) || 0,
-      unitPrice: parseFloat(parts[2]) || 0,
-      category: parts[3]?.trim() || "Autre",
-      unit: parts[4]?.trim() || "pces",
-      currency: 'Fc'
+      siteName: site.name,
+      status: healthScore > 80 ? 'green' as const : healthScore > 50 ? 'orange' as const : 'red' as const,
+      score: Math.round(healthScore)
     };
   });
+
+  // 4. Analyse du Bilan (Entrées vs Sorties sur 30 jours)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(now.getDate() - 30);
+  let totalIn = 0;
+  let totalOut = 0;
+
+  history.forEach(h => {
+    if (new Date(h.date) >= thirtyDaysAgo) {
+      const product = products.find(p => p.id === h.productId);
+      const priceFc = product ? (product.currency === '$' ? product.unitPrice * exchangeRate : product.unitPrice) : 0;
+      const val = Math.abs(h.changeAmount) * priceFc;
+      if (h.type === 'entry') totalIn += val;
+      if (h.type === 'exit') totalOut += val;
+    }
+  });
+
+  const isPositive = totalIn >= totalOut;
+  const balanceRatio = totalOut === 0 ? 100 : (totalIn / totalOut) * 100;
+
+  // Finalisation du rapport
+  const totalValue = Object.values(categoryData).reduce((a, b) => a + b, 0);
+
+  return {
+    summary: `Valorisation globale : ${totalValue.toLocaleString()} Fc. Réseau de ${sites.length} sites analysé.`,
+    criticalAlerts: products.filter(p => p.currentStock <= p.minStock).map(p => `${p.name} : Critique`),
+    recommendations: [
+      `${healthIndicators.filter(h => h.status === 'red').length} sites nécessitent une attention urgente.`,
+      `Budget réappro estimé : ${(totalValue * 0.15).toLocaleString()} Fc.`,
+      isPositive ? "Le bilan flux est positif : les entrées couvrent les consommations." : "Bilan flux négatif : déstockage net observé ce mois."
+    ],
+    financialProjection: `Flux mensuel moyen : ${(Object.values(monthlyExpenses).reduce((a, b) => a + b, 0) / 3 || 0).toLocaleString()} Fc.`,
+    chartData: Object.entries(categoryData).map(([label, valeur]) => ({ label, valeur })),
+    topConsumption: Object.entries(productConsumption).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([label, valeur]) => ({ label, valeur })),
+    siteValueData: Object.entries(siteValueData).map(([label, valeur]) => ({ label, valeur })),
+    siteExpenseData: Object.entries(siteExpenses).map(([label, valeur]) => ({ label, valeur })),
+    monthlyExpenseData: Object.entries(monthlyExpenses).map(([label, valeur]) => ({ label, valeur })),
+    healthIndicators,
+    balanceAnalysis: {
+      isPositive,
+      ratio: Math.round(balanceRatio),
+      message: isPositive ? "Sain : Entrées > Sorties" : "Alerte : Sorties > Entrées"
+    },
+    generatedAt: now.toISOString()
+  };
 };
