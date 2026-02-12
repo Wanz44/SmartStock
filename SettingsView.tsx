@@ -251,7 +251,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem, notify
                       <div className="h-10 w-px bg-slate-100" />
                       <div className="space-y-2">
                         <label className="text-[8px] font-black uppercase text-slate-300 ml-1">Padding Cellules</label>
-                        <input type="range" min="2" max="16" value={localSettings.printCellPadding} onChange={(e) => handleChange('printCellPadding', Number(e.target.value)} className="w-32 accent-[#1a3a22]" />
+                        <input type="range" min="2" max="16" value={localSettings.printCellPadding} onChange={(e) => handleChange('printCellPadding', Number(e.target.value))} className="w-32 accent-[#1a3a22]" />
                       </div>
                    </div>
                 </div>
