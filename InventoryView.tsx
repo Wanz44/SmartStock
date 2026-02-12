@@ -37,7 +37,8 @@ export const InventoryView = ({
 
   const handleExportCSV = () => {
     if (products.length === 0) return alert("Aucune donnée à exporter.");
-    const headers = ["N°", "Statut", "Prix Total (Fc)", "Produit", "ID", "Catégorie", "Site", "Quantité", "Prix Unitaire (Fc)"];
+    // Alignement CSV sur le nouvel ordre demandé
+    const headers = ["N°", "ID", "Produit", "Catégorie", "Quantité", "Prix Unitaire (Fc)", "Prix Total (Fc)", "Site", "Statut"];
     const rows = products.map((p, idx) => {
       const siteName = sites.find(s => s.id === p.siteId)?.name || 'N/A';
       const isLow = p.currentStock <= p.minStock;
@@ -45,14 +46,14 @@ export const InventoryView = ({
       const totalPriceFc = p.currentStock * unitPriceFc;
       return [
         idx + 1, 
-        isLow ? "CRITIQUE" : "OPTIMAL", 
-        totalPriceFc.toFixed(0),
-        p.name, 
         p.id, 
+        p.name, 
         p.category, 
-        siteName, 
         p.currentStock, 
-        unitPriceFc
+        unitPriceFc.toFixed(0),
+        totalPriceFc.toFixed(0),
+        siteName,
+        isLow ? "CRITIQUE" : "OPTIMAL"
       ];
     });
     const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(";")).join("\n");
@@ -82,7 +83,7 @@ export const InventoryView = ({
             <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
             <input 
               type="text" 
-              placeholder="Filtrer l'inventaire..." 
+              placeholder="Rechercher une référence ou un produit..." 
               className="w-full bg-slate-50 border border-slate-100 pl-14 pr-6 py-4 rounded-2xl text-[12px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22]"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -103,10 +104,10 @@ export const InventoryView = ({
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-3 px-8 py-4.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest hover:bg-emerald-100 transition-all shadow-sm"
           >
-            <FileUp className="w-5 h-5" /> Importer CSV
+            <FileUp className="w-5 h-5" /> Importer
           </button>
           
-          <button onClick={handleExportCSV} className="p-4.5 bg-slate-50 text-slate-600 rounded-[1.5rem] hover:bg-blue-50 border border-slate-100 transition-all">
+          <button onClick={handleExportCSV} title="Exporter en CSV" className="p-4.5 bg-slate-50 text-slate-600 rounded-[1.5rem] hover:bg-blue-50 border border-slate-100 transition-all">
             <FileDown className="w-5 h-5" />
           </button>
 
@@ -115,32 +116,31 @@ export const InventoryView = ({
           </button>
 
           <button onClick={onAdd} className="flex items-center gap-3 px-8 py-4.5 bg-[#1a3a22] text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest hover:bg-emerald-900 transition-all shadow-xl active:scale-95">
-            <Plus className="w-4 h-4" /> Nouveau Produit
+            <Plus className="w-4 h-4" /> Ajouter
           </button>
         </div>
         <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={onImport} />
       </div>
 
-      {/* TABLEAU PRINCIPAL : CLASSIFICATION SMARTSTOCK PRO */}
+      {/* TABLEAU RÉALIGNÉ : N°, ID, Produit, Catégorie, Quantité, Prix Unitaire, Prix Total, Site */}
       <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-xl overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 border-b border-slate-100">
             <tr>
               <th className="px-6 py-8 text-center w-16">N°</th>
-              <th className="px-6 py-8 text-center">Statut</th>
-              {!settings.maskSensitiveData && <th className="px-6 py-8 text-right">Prix Total</th>}
+              <th className="px-6 py-8">ID / Réf</th>
               <th className="px-8 py-8">Produit</th>
-              <th className="px-6 py-8">ID</th>
-              <th className="px-6 py-8">Catégorie</th>
-              <th className="px-6 py-8">Site</th>
+              <th className="px-6 py-8 text-center">Catégorie</th>
               <th className="px-6 py-8 text-center">Quantité</th>
-              {!settings.maskSensitiveData && <th className="px-6 py-8 text-right">P.U</th>}
+              {!settings.maskSensitiveData && <th className="px-6 py-8 text-right">Prix Unitaire</th>}
+              {!settings.maskSensitiveData && <th className="px-6 py-8 text-right">Prix Total</th>}
+              <th className="px-6 py-8">Site / Emplacement</th>
               <th className="px-6 py-8 text-right no-print">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {filteredProducts.length === 0 ? (
-              <tr><td colSpan={10} className="px-10 py-32 text-center opacity-20"><Database className="w-16 h-16 mx-auto mb-4" /><p className="text-xl font-header uppercase">Aucune donnée trouvée</p></td></tr>
+              <tr><td colSpan={9} className="px-10 py-32 text-center opacity-20"><Database className="w-16 h-16 mx-auto mb-4" /><p className="text-xl font-header uppercase">Aucune donnée trouvée</p></td></tr>
             ) : (
               filteredProducts.map((p, idx) => {
                 const isLow = p.currentStock <= p.minStock;
@@ -149,36 +149,52 @@ export const InventoryView = ({
                 return (
                   <tr key={p.id} className={`group hover:bg-slate-50/50 transition-colors ${isLow ? 'bg-rose-50/20' : ''}`}>
                     <td className="px-6 py-7 text-center font-black text-slate-300 text-[10px] italic">{idx + 1}</td>
-                    <td className="px-6 py-7 text-center">
-                       <Badge variant={isLow ? 'danger' : 'success'}>{isLow ? 'CRITIQUE' : 'OPTIMAL'}</Badge>
+                    
+                    <td className="px-6 py-7">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{p.id}</p>
                     </td>
+
+                    <td className="px-8 py-7">
+                       <div className="flex flex-col">
+                          <p className="text-[13px] font-black uppercase italic text-slate-900 group-hover:text-[#1a3a22] leading-tight">{p.name}</p>
+                          {isLow && <span className="text-[7px] font-black text-rose-500 uppercase mt-1 tracking-tighter animate-pulse flex items-center gap-1"><AlertCircle className="w-2 h-2" /> SEUIL CRITIQUE</span>}
+                       </div>
+                    </td>
+
+                    <td className="px-6 py-7 text-center">
+                      <span className="text-[9px] font-black uppercase text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{p.category}</span>
+                    </td>
+
+                    <td className="px-6 py-7 text-center">
+                       <div className="flex flex-col items-center">
+                          <span className={`text-xl font-header italic ${isLow ? 'text-rose-500' : 'text-[#1a3a22]'}`}>{p.currentStock}</span>
+                          <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">{p.unit}</span>
+                       </div>
+                    </td>
+
+                    {!settings.maskSensitiveData && (
+                      <td className="px-6 py-7 text-right">
+                        <p className="text-[11px] font-black italic text-slate-400">{unitPriceFc.toLocaleString()} <span className="text-[7px]">Fc</span></p>
+                      </td>
+                    )}
+
                     {!settings.maskSensitiveData && (
                       <td className="px-6 py-7 text-right">
                         <p className="text-sm font-header italic text-[#1a3a22]">{totalPriceFc.toLocaleString()} <span className="text-[8px] font-black">FC</span></p>
                       </td>
                     )}
-                    <td className="px-8 py-7">
-                       <p className="text-[13px] font-black uppercase italic text-slate-900 group-hover:text-[#1a3a22] leading-tight">{p.name}</p>
+
+                    <td className="px-6 py-7">
+                      <p className="text-[9px] font-bold text-slate-400 flex items-center gap-1.5 uppercase">
+                        <MapPin className="w-3 h-3 text-slate-300" /> {sites.find(s => s.id === p.siteId)?.name || 'N/A'}
+                      </p>
                     </td>
-                    <td className="px-6 py-7"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{p.id}</p></td>
-                    <td className="px-6 py-7"><span className="text-[9px] font-black uppercase text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{p.category}</span></td>
-                    <td className="px-6 py-7"><p className="text-[9px] font-bold text-slate-400 flex items-center gap-1.5 uppercase"><MapPin className="w-3 h-3 text-slate-300" /> {sites.find(s => s.id === p.siteId)?.name || 'N/A'}</p></td>
-                    <td className="px-6 py-7 text-center">
-                       <div className="flex flex-col items-center">
-                          <span className={`text-xl font-header italic ${isLow ? 'text-rose-500' : 'text-slate-900'}`}>{p.currentStock}</span>
-                          <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">{p.unit}</span>
-                       </div>
-                    </td>
-                    {!settings.maskSensitiveData && (
-                      <td className="px-6 py-7 text-right">
-                        <p className="text-[11px] font-black italic text-slate-400">{unitPriceFc.toLocaleString()}</p>
-                      </td>
-                    )}
+
                     <td className="px-6 py-7 text-right no-print">
                       <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
-                        <button onClick={() => onMovement(p, 'entry')} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><History className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => onEdit(p)} className="p-2 bg-slate-50 text-slate-600 rounded-lg hover:bg-[#1a3a22] hover:text-white transition-all shadow-sm"><Edit3 className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => onDelete(p.id)} className="p-2 bg-rose-50 text-rose-300 rounded-lg hover:bg-rose-500 hover:text-white transition-all shadow-sm"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => onMovement(p, 'entry')} title="Mouvement Stock" className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><History className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => onEdit(p)} title="Modifier" className="p-2 bg-slate-50 text-slate-600 rounded-lg hover:bg-[#1a3a22] hover:text-white transition-all shadow-sm"><Edit3 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => onDelete(p.id)} title="Supprimer" className="p-2 bg-rose-50 text-rose-300 rounded-lg hover:bg-rose-500 hover:text-white transition-all shadow-sm"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>
@@ -192,7 +208,7 @@ export const InventoryView = ({
       <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 flex items-center gap-4 no-print opacity-60">
         <Info className="w-5 h-5 text-slate-400" />
         <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-loose">
-          <b>Classification Intelligente :</b> Le système calcule automatiquement le statut critique et la valorisation financière même sur les données importées.
+          <b>Logic Controller :</b> L'alignement des colonnes est optimisé pour une lecture rapide des indicateurs de performance (KPI) et de la valorisation monétaire.
         </p>
       </div>
     </div>
