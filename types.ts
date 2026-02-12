@@ -26,20 +26,18 @@ export interface AppSettings {
   defaultSafetyMargin: number;
   autoBackup: boolean;
   units: string[];
-  // Réglages d'impression de base
   printHeader: string;
   printFooter: string;
   maskSensitiveData: boolean;
   printModel: 'classic' | 'excel-green' | 'modern-dark';
   showPageNumbers: boolean;
-  // Mise en forme avancée (Style Excel)
   printFontFamily: 'Calibri' | 'Inter' | 'Plus Jakarta Sans' | 'Courier New';
   printFontSize: number;
   printBoldHeaders: boolean;
   printThemeColor: string;
   printStripeColor: string;
   printBorderWidth: number;
-  printConditionalFormatting: boolean; // Mise en forme conditionnelle auto
+  printConditionalFormatting: boolean;
   printCellPadding: number;
 }
 
@@ -65,6 +63,7 @@ export interface Furniture {
   currentCount: number;
   condition: 'Neuf' | 'Bon' | 'Usé' | 'Endommagé';
   lastChecked: string;
+  comment?: string;
 }
 
 export interface FurnitureAuditItem {
@@ -149,7 +148,8 @@ export type ViewType =
   | 'needs_list' 
   | 'analytics' 
   | 'settings'
-  | 'movements';
+  | 'movements'
+  | 'trash';
 
 export interface RapportAutomatique {
   summary: string;

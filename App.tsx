@@ -1,11 +1,10 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, Box, History as HistoryIcon, Activity, LogOut, 
-  Settings, CheckSquare, FileBarChart, ListChecks, Globe, X, RefreshCw,
-  MapPin, CheckCircle2, Info, Lamp, ArrowLeftRight,
-  Search, Truck, Command, AlertTriangle, Database,
-  Plus, Save, ChevronRight, ClipboardCheck, ShoppingCart, Calculator, Edit3
+  Settings, CheckSquare, FileBarChart, X,
+  MapPin, Lamp, Truck, Database,
+  Plus, Save, Trash2, ShoppingCart, Edit3, RotateCcw
 } from 'lucide-react';
 import { 
   Product, InventoryLog, ViewType, Task, AppSettings, NeedReport, 
@@ -13,7 +12,7 @@ import {
 } from './types';
 import { INITIAL_CATEGORIES, INITIAL_UNITS } from './constants';
 
-// Importation des vues modulaires
+// Vues
 import { DashboardView } from './DashboardView';
 import { InventoryView } from './InventoryView';
 import { GlobalHistoryView } from './GlobalHistoryView';
@@ -27,6 +26,7 @@ import { SitesView } from './SitesView';
 import { FurnitureView } from './FurnitureView';
 import { MovementsView } from './MovementsView';
 import { SuppliersView } from './SuppliersView';
+import { TrashView } from './TrashView';
 
 // Services
 import { getAutomatedAnalysis } from './services/analysisService';
@@ -61,24 +61,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   printCellPadding: 8
 };
 
-const getViewTitle = (view: ViewType): string => {
-  switch (view) {
-    case 'dashboard': return 'Tableau de Bord';
-    case 'inventory': return 'Inventaire Consommables';
-    case 'furniture': return 'Inventaire Mobilier';
-    case 'sites': return 'Gestion Sites';
-    case 'suppliers': return 'Gestion Fournisseurs';
-    case 'audit': return 'Audit / Écarts';
-    case 'traceability': return 'Historique Complet';
-    case 'tasks': return 'Agenda Tâches';
-    case 'needs_list': return 'État de Besoins';
-    case 'analytics': return 'Analyses Auto';
-    case 'settings': return 'Paramètres';
-    case 'movements': return 'Entrées & Sorties';
-    default: return 'SmartStock ERP';
-  }
-};
-
 interface Notification {
   id: number;
   message: string;
@@ -99,7 +81,7 @@ const NavItem = ({ active, onClick, icon: Icon, label, alertCount = 0 }: any) =>
       <span className="truncate">{label}</span>
     </div>
     {alertCount > 0 && (
-      <span className="bg-rose-500 text-white w-4 h-4 rounded-full flex items-center justify-center text-[7px] animate-pulse">
+      <span className="bg-rose-500 text-white min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center text-[7px] animate-pulse">
         {alertCount}
       </span>
     )}
@@ -113,7 +95,10 @@ export default function App() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
   const [products, setProducts] = useState<Product[]>(getStored('ss_products', []));
+  const [deletedProducts, setDeletedProducts] = useState<Product[]>(getStored('ss_deleted_products', []));
   const [furniture, setFurniture] = useState<Furniture[]>(getStored('ss_furniture', []));
+  const [deletedFurniture, setDeletedFurniture] = useState<Furniture[]>(getStored('ss_deleted_furniture', []));
+  
   const [furnitureAudits, setFurnitureAudits] = useState<FurnitureAuditSession[]>(getStored('ss_furniture_audits', []));
   const [history, setHistory] = useState<InventoryLog[]>(getStored('ss_history', []));
   const [tasks, setTasks] = useState<Task[]>(getStored('ss_tasks', []));
@@ -127,7 +112,6 @@ export default function App() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const [newProductData, setNewProductData] = useState({
@@ -136,9 +120,7 @@ export default function App() {
     monthlyNeed: 20
   });
 
-  const [isFirstLaunch, setIsFirstLaunch] = useState(() => {
-    return products.length === 0 && sites.length === 0;
-  });
+  const [isFirstLaunch, setIsFirstLaunch] = useState(() => products.length === 0 && sites.length === 0);
 
   const notify = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
     const id = Date.now();
@@ -152,8 +134,7 @@ export default function App() {
     const finalStock = product.currentStock + amount;
     if (finalStock < 0) return notify(`Stock insuffisant pour ${product.name}`, "error");
 
-    const updated = products.map(p => p.id === prodId ? { ...p, currentStock: finalStock, lastInventoryDate: new Date().toISOString() } : p);
-    setProducts(updated);
+    setProducts(products.map(p => p.id === prodId ? { ...p, currentStock: finalStock, lastInventoryDate: new Date().toISOString() } : p));
     
     const newLog: InventoryLog = { 
       id: `LOG-${Date.now()}`.toUpperCase(),
@@ -161,7 +142,6 @@ export default function App() {
       changeAmount: amount, finalStock, reason: reason || 'Transaction manuelle', responsible: 'ADMIN', siteId: product.siteId 
     };
     setHistory([newLog, ...history]);
-    notify(`${amount > 0 ? 'Entrée' : 'Sortie'} validée pour ${product.name}`);
   };
 
   const handleAddProduct = (e?: React.FormEvent) => {
@@ -182,20 +162,50 @@ export default function App() {
     notify(`Produit "${product.name}" ajouté.`);
   };
 
-  const handleEditProduct = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingProduct) return;
-    
-    const updatedProducts = products.map(p => 
-      p.id === editingProduct.id ? { ...editingProduct, name: editingProduct.name.toUpperCase() } : p
-    );
-    setProducts(updatedProducts);
-    setIsEditModalOpen(false);
-    setEditingProduct(null);
-    notify(`Produit "${editingProduct.name}" mis à jour.`);
+  // LOGIQUE DE LA CORBEILLE
+  const handleMoveProductToTrash = (id: string) => {
+    const prod = products.find(p => p.id === id);
+    if (!prod) return;
+    setDeletedProducts([...deletedProducts, prod]);
+    setProducts(products.filter(p => p.id !== id));
+    notify(`"${prod.name}" déplacé vers la corbeille.`);
   };
 
-  // MOTEUR D'IMPORTATION MOBILIER INTELLIGENT
+  const handleRestoreProduct = (id: string) => {
+    const prod = deletedProducts.find(p => p.id === id);
+    if (!prod) return;
+    // Vérifier si le site existe encore
+    const siteExists = sites.find(s => s.id === prod.siteId);
+    const finalProd = siteExists ? prod : { ...prod, siteId: sites[0]?.id || 'SITE-01' };
+    setProducts([...products, finalProd]);
+    setDeletedProducts(deletedProducts.filter(p => p.id !== id));
+    notify(`"${prod.name}" restauré avec succès.`);
+  };
+
+  const handlePermanentDeleteProduct = (id: string) => {
+    setDeletedProducts(deletedProducts.filter(p => p.id !== id));
+    notify("Produit définitivement supprimé.", "error");
+  };
+
+  const handleMoveFurnitureToTrash = (id: string) => {
+    const item = furniture.find(f => f.id === id);
+    if (!item) return;
+    setDeletedFurniture([...deletedFurniture, item]);
+    setFurniture(furniture.filter(f => f.id !== id));
+    notify(`"${item.name}" déplacé vers la corbeille.`);
+  };
+
+  const handleRestoreFurniture = (id: string) => {
+    const item = deletedFurniture.find(f => f.id === id);
+    if (!item) return;
+    const siteExists = sites.find(s => s.id === item.siteId);
+    const finalItem = siteExists ? item : { ...item, siteId: sites[0]?.id || 'SITE-01' };
+    setFurniture([...furniture, finalItem]);
+    setDeletedFurniture(deletedFurniture.filter(f => f.id !== id));
+    notify(`"${item.name}" restauré avec succès.`);
+  };
+
+  // IMPORTATION MOBILIER AVEC CRÉATION DE SITES
   const handleImportFurniture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -203,12 +213,11 @@ export default function App() {
     reader.onload = (event) => {
       const text = event.target?.result as string;
       const lines = text.split('\n').filter(l => l.trim() !== '');
-      if (lines.length <= 1) return notify("Fichier vide ou mal formaté", "error");
+      if (lines.length <= 1) return notify("Fichier vide", "error");
       
       const newFurniture = [...furniture];
       const newSites = [...sites];
       let importCount = 0;
-      let siteCount = 0;
 
       lines.slice(1).forEach(line => {
         const parts = line.split(/[;,]/).map(p => p.trim());
@@ -218,45 +227,44 @@ export default function App() {
           const siteNameInput = parts[2] || 'MAGASIN CENTRAL';
           const qty = parseInt(parts[3]) || 1;
           const condition = (parts[4] as any) || 'Bon';
-          const comment = parts[5] || '';
 
-          // Gestion intelligente du site
           let siteObj = newSites.find(s => s.name.toUpperCase() === siteNameInput.toUpperCase());
           if (!siteObj) {
-            siteObj = {
-              id: `SITE-${Date.now()}-${Math.random().toString(36).substr(2, 3)}`.toUpperCase(),
-              name: siteNameInput,
-              location: 'Auto-généré',
-              capacity: 1000,
-              status: 'Opérationnel',
-              manager: 'Système'
-            };
+            siteObj = { id: `S-${Date.now()}-${Math.random().toString(36).substr(2,3)}`.toUpperCase(), name: siteNameInput, location: 'Auto-généré', capacity: 1000, status: 'Opérationnel', manager: 'Admin' };
             newSites.push(siteObj);
-            siteCount++;
           }
 
           if (!newFurniture.find(f => f.code === code)) {
-            newFurniture.push({
-              id: `F-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`.toUpperCase(),
-              code,
-              name,
-              siteId: siteObj.id,
-              currentCount: qty,
-              condition: condition as any,
-              lastChecked: new Date().toISOString()
-            });
+            newFurniture.push({ id: `F-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`.toUpperCase(), code, name, siteId: siteObj.id, currentCount: qty, condition, lastChecked: new Date().toISOString() });
             importCount++;
           }
         }
       });
-
       setSites(newSites);
       setFurniture(newFurniture);
-      notify(`${importCount} mobiliers importés. ${siteCount} nouveaux sites créés.`);
+      notify(`${importCount} mobiliers importés.`);
     };
     reader.readAsText(file);
     if (e.target) e.target.value = '';
   };
+
+  useEffect(() => {
+    const storageKeys = {
+      'ss_products': products,
+      'ss_deleted_products': deletedProducts,
+      'ss_furniture': furniture,
+      'ss_deleted_furniture': deletedFurniture,
+      'ss_sites': sites,
+      'ss_history': history,
+      'ss_tasks': tasks,
+      'ss_settings': settings,
+      'ss_suppliers': suppliers,
+      'ss_furniture_audits': furnitureAudits,
+      'ss_needs_history': needsHistory,
+      'isLoggedIn': isLoggedIn
+    };
+    Object.entries(storageKeys).forEach(([key, val]) => localStorage.setItem(key, JSON.stringify(val)));
+  }, [products, deletedProducts, furniture, deletedFurniture, history, tasks, isLoggedIn, settings, sites, suppliers, furnitureAudits, needsHistory]);
 
   const runAutomatedAnalysis = async () => {
     if (products.length === 0) return;
@@ -269,34 +277,15 @@ export default function App() {
     } finally { setIsAnalyzing(false); }
   };
 
-  useEffect(() => {
-    if (activeView === 'analytics') runAutomatedAnalysis();
-  }, [activeView]);
-
-  useEffect(() => {
-    localStorage.setItem('ss_products', JSON.stringify(products));
-    localStorage.setItem('ss_sites', JSON.stringify(sites));
-    localStorage.setItem('ss_history', JSON.stringify(history));
-    localStorage.setItem('ss_tasks', JSON.stringify(tasks));
-    localStorage.setItem('ss_settings', JSON.stringify(settings));
-    localStorage.setItem('ss_furniture', JSON.stringify(furniture));
-    localStorage.setItem('ss_suppliers', JSON.stringify(suppliers));
-    localStorage.setItem('ss_furniture_audits', JSON.stringify(furnitureAudits));
-    localStorage.setItem('ss_needs_history', JSON.stringify(needsHistory));
-    localStorage.setItem('isLoggedIn', JSON.stringify(isLoggedIn));
-  }, [products, history, tasks, isLoggedIn, settings, sites, furniture, suppliers, furnitureAudits, needsHistory]);
-
-  if (isFirstLaunch) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#1a3a22] p-6">
-        <div className="bg-white w-full max-w-md rounded-[3rem] p-12 shadow-2xl text-center">
-          <Database className="w-16 h-16 text-emerald-600 mx-auto mb-6" />
-          <h2 className="text-2xl font-black uppercase text-[#1a3a22]">Initialisation Système</h2>
-          <button onClick={() => { setSites([{ id: 'SITE-01', name: 'Magasin Central', location: 'Local', capacity: 5000, status: 'Opérationnel', manager: 'Admin' }]); setIsFirstLaunch(false); setIsLoggedIn(true); }} className="w-full mt-8 bg-emerald-600 text-white py-6 rounded-2xl font-black uppercase shadow-xl hover:bg-emerald-700 transition-all">Lancer la Plateforme</button>
-        </div>
+  if (isFirstLaunch) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#1a3a22] p-6">
+      <div className="bg-white w-full max-w-md rounded-[3rem] p-12 shadow-2xl text-center">
+        <Database className="w-16 h-16 text-emerald-600 mx-auto mb-6" />
+        <h2 className="text-2xl font-black uppercase text-[#1a3a22]">Initialisation Système</h2>
+        <button onClick={() => { setSites([{ id: 'SITE-01', name: 'Magasin Central', location: 'Local', capacity: 5000, status: 'Opérationnel', manager: 'Admin' }]); setIsFirstLaunch(false); setIsLoggedIn(true); }} className="w-full mt-8 bg-emerald-600 text-white py-6 rounded-2xl font-black uppercase shadow-xl hover:bg-emerald-700 transition-all">Lancer la Plateforme</button>
       </div>
-    );
-  }
+    </div>
+  );
 
   if (!isLoggedIn) return <LoginView enterpriseName={settings.enterpriseName} onLogin={() => setIsLoggedIn(true)} />;
 
@@ -309,19 +298,20 @@ export default function App() {
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
           <NavItem active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} icon={LayoutDashboard} label="Tableau de bord" />
-          <NavItem active={activeView === 'inventory'} onClick={() => setActiveView('inventory')} icon={Box} label="Inventaire Consommables" />
-          <NavItem active={activeView === 'furniture'} onClick={() => setActiveView('furniture')} icon={Lamp} label="Inventaire Mobilier" />
-          <NavItem active={activeView === 'sites'} onClick={() => setActiveView('sites')} icon={MapPin} label="Gestion Sites" />
+          <NavItem active={activeView === 'inventory'} onClick={() => setActiveView('inventory')} icon={Box} label="Consommables" />
+          <NavItem active={activeView === 'furniture'} onClick={() => setActiveView('furniture')} icon={Lamp} label="Mobilier" />
+          <NavItem active={activeView === 'sites'} onClick={() => setActiveView('sites')} icon={MapPin} label="Sites" />
           <NavItem active={activeView === 'suppliers'} onClick={() => setActiveView('suppliers')} icon={Truck} label="Fournisseurs" />
-          <NavItem active={activeView === 'audit'} onClick={() => setActiveView('audit')} icon={ClipboardCheck} label="Audit / Écarts" />
-          <NavItem active={activeView === 'traceability'} onClick={() => setActiveView('traceability')} icon={HistoryIcon} label="Historique Complet" />
-          <NavItem active={activeView === 'tasks'} onClick={() => setActiveView('tasks')} icon={CheckSquare} label="Agenda Tâches" alertCount={tasks.filter(t => t.status === 'En attente').length} />
-          <NavItem active={activeView === 'needs_list'} onClick={() => setActiveView('needs_list')} icon={ShoppingCart} label="État de Besoins" />
-          <NavItem active={activeView === 'analytics'} onClick={() => setActiveView('analytics')} icon={FileBarChart} label="Analyses Auto" />
+          <NavItem active={activeView === 'audit'} onClick={() => setActiveView('audit')} icon={CheckSquare} label="Audit" />
+          <NavItem active={activeView === 'traceability'} onClick={() => setActiveView('traceability')} icon={HistoryIcon} label="Historique" />
+          <NavItem active={activeView === 'tasks'} onClick={() => setActiveView('tasks')} icon={CheckSquare} label="Agenda" alertCount={tasks.filter(t => t.status === 'En attente').length} />
+          <NavItem active={activeView === 'needs_list'} onClick={() => setActiveView('needs_list')} icon={ShoppingCart} label="Besoins" />
+          <NavItem active={activeView === 'analytics'} onClick={() => setActiveView('analytics')} icon={FileBarChart} label="Analyses" />
+          <NavItem active={activeView === 'trash'} onClick={() => setActiveView('trash')} icon={Trash2} label="Corbeille" alertCount={deletedProducts.length + deletedFurniture.length} />
           <NavItem active={activeView === 'settings'} onClick={() => setActiveView('settings')} icon={Settings} label="Paramètres" />
         </nav>
         <button onClick={() => setIsLoggedIn(false)} className="mt-8 flex items-center gap-4 px-6 py-4 rounded-2xl bg-white/5 text-slate-400 font-bold text-[10px] uppercase hover:bg-rose-600 hover:text-white transition-all">
-          <LogOut className="w-4 h-4" /> Clôturer Session
+          <LogOut className="w-4 h-4" /> Déconnexion
         </button>
       </aside>
 
@@ -329,122 +319,50 @@ export default function App() {
         <header className="mb-10 flex justify-between items-end no-print">
           <div>
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">{settings.enterpriseName}</p>
-            <h2 className="text-[44px] font-header text-slate-900 leading-none italic uppercase">{getViewTitle(activeView)}</h2>
-          </div>
-          <div className="bg-white px-5 py-3 rounded-2xl border border-slate-100 flex items-center gap-3 shadow-sm">
-             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-             <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">{settings.locationId}</span>
+            <h2 className="text-[44px] font-header text-slate-900 leading-none italic uppercase">
+              {activeView === 'trash' ? 'Corbeille Archive' : activeView}
+            </h2>
           </div>
         </header>
 
         <section className="animate-fade-in">
           {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setActiveView} />}
-          {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={(p) => setActiveView('movements')} onEdit={(p) => { setEditingProduct(p); setIsEditModalOpen(true); }} onImport={(e) => {}} onAdd={() => setIsAddModalOpen(true)} onDelete={(id) => setProducts(products.filter(p => p.id !== id))} />}
+          {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={() => setActiveView('movements')} onEdit={(p) => { setEditingProduct(p); setIsEditModalOpen(true); }} onImport={() => {}} onAdd={() => setIsAddModalOpen(true)} onDelete={handleMoveProductToTrash} />}
           {activeView === 'furniture' && <FurnitureView furniture={furniture} setFurniture={setFurniture} furnitureAudits={furnitureAudits} setFurnitureAudits={setFurnitureAudits} sites={sites} notify={notify} onImportFurniture={handleImportFurniture} />}
-          {activeView === 'sites' && <SitesView sites={sites} setSites={setSites} products={products} onCopyData={() => {}} onImportCSV={() => {}} />}
+          {activeView === 'sites' && <SitesView sites={sites} setSites={setSites} products={products} onAddProduct={(sid) => { setNewProductData({...newProductData, siteId: sid}); setIsAddModalOpen(true); }} onAddFurniture={(sid) => setActiveView('furniture')} />}
           {activeView === 'suppliers' && <SuppliersView suppliers={suppliers} setSuppliers={setSuppliers} notify={notify} />}
           {activeView === 'audit' && <AuditView products={products} sites={sites} exchangeRate={settings.exchangeRate} onUpdateStock={handleTransaction} notify={notify} />}
           {activeView === 'traceability' && <GlobalHistoryView history={history} needsHistory={needsHistory} furnitureAudits={furnitureAudits} sites={sites} products={products} settings={settings} />}
           {activeView === 'tasks' && <TasksView tasks={tasks} setTasks={setTasks} notify={notify} />}
           {activeView === 'needs_list' && <NeedsReportView products={products} settings={settings} needsHistory={needsHistory} onSaveReport={(r) => setNeedsHistory([r, ...needsHistory])} onDeleteReport={(id) => setNeedsHistory(needsHistory.filter(n => n.id !== id))} sites={sites} />}
           {activeView === 'analytics' && <AnalyticsView products={products} history={history} exchangeRate={settings.exchangeRate} sites={sites} report={autoReport} analysis={autoAnalysis} isAnalyzing={isAnalyzing} onRefresh={runAutomatedAnalysis} />}
-          {activeView === 'settings' && <SettingsView settings={settings} onUpdateSettings={setSettings} onResetSystem={() => {localStorage.clear(); window.location.reload();}} />}
+          {activeView === 'trash' && <TrashView products={deletedProducts} furniture={deletedFurniture} onRestoreProduct={handleRestoreProduct} onDeleteProduct={handlePermanentDeleteProduct} onRestoreFurniture={handleRestoreFurniture} onDeleteFurniture={(id) => setDeletedFurniture(deletedFurniture.filter(f => f.id !== id))} />}
+          {activeView === 'settings' && <SettingsView settings={settings} onUpdateSettings={setSettings} onResetSystem={() => {localStorage.clear(); window.location.reload();}} notify={notify} />}
           {activeView === 'movements' && <MovementsView products={products} sites={sites} history={history} onTransaction={handleTransaction} />}
         </section>
 
-        {/* MODAL AJOUT PRODUIT */}
+        {/* MODAUX COMMONS */}
         {isAddModalOpen && (
           <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
             <form onSubmit={handleAddProduct} className="bg-white w-full max-w-2xl rounded-[3.5rem] shadow-2xl p-12 space-y-8 overflow-y-auto max-h-[90vh]">
               <div className="flex justify-between items-center">
-                <div className="flex items-center gap-5">
-                  <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-600"><Plus className="w-7 h-7" /></div>
-                  <div>
-                    <h3 className="text-3xl font-header italic uppercase leading-none">Nouvelle Référence</h3>
-                  </div>
-                </div>
-                <button type="button" onClick={() => setIsAddModalOpen(false)} className="p-3 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X className="w-5 h-5" /></button>
+                <h3 className="text-3xl font-header italic uppercase">Nouvelle Référence</h3>
+                <button type="button" onClick={() => setIsAddModalOpen(false)} className="p-3 bg-slate-100 rounded-full hover:bg-slate-200"><X className="w-5 h-5" /></button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-3">SKU / ID</label>
-                  <input type="text" placeholder="AUTO" value={newProductData.id} onChange={(e) => setNewProductData({...newProductData, id: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-3">Produit</label>
-                  <input required type="text" placeholder="NOM DE L'ARTICLE" value={newProductData.name} onChange={(e) => setNewProductData({...newProductData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-3">Catégorie</label>
-                  <select value={newProductData.category} onChange={(e) => setNewProductData({...newProductData, category: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
-                    {INITIAL_CATEGORIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-3">Site</label>
-                  <select required value={newProductData.siteId} onChange={(e) => setNewProductData({...newProductData, siteId: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
-                    <option value="">SÉLECTIONNER...</option>
-                    {sites.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-3">Prix Unitaire</label>
-                  <input type="number" value={newProductData.unitPrice} onChange={(e) => setNewProductData({...newProductData, unitPrice: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-3">Stock Initial</label>
-                  <input type="number" value={newProductData.initialStock} onChange={(e) => setNewProductData({...newProductData, initialStock: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <input required type="text" placeholder="NOM DE L'ARTICLE" value={newProductData.name} onChange={(e) => setNewProductData({...newProductData, name: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none" />
+                <select required value={newProductData.siteId} onChange={(e) => setNewProductData({...newProductData, siteId: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
+                  {sites.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
+                </select>
+                <input type="number" placeholder="STOCK INITIAL" value={newProductData.initialStock} onChange={(e) => setNewProductData({...newProductData, initialStock: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
               </div>
-              <button type="submit" className="w-full bg-[#1a3a22] text-white py-8 rounded-[2.5rem] font-black text-[13px] uppercase tracking-[0.2em] shadow-2xl hover:bg-emerald-900 transition-all flex items-center justify-center gap-4">
-                <Save className="w-6 h-6" /> Intégrer dans la BDD
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* MODAL MODIFICATION PRODUIT */}
-        {isEditModalOpen && editingProduct && (
-          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
-            <form onSubmit={handleEditProduct} className="bg-white w-full max-w-2xl rounded-[3.5rem] shadow-2xl p-12 space-y-8 overflow-y-auto max-h-[90vh]">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-5">
-                  <div className="p-4 bg-blue-50 rounded-2xl text-blue-600"><Edit3 className="w-7 h-7" /></div>
-                  <div>
-                    <h3 className="text-3xl font-header italic uppercase leading-none">Modifier Article</h3>
-                  </div>
-                </div>
-                <button type="button" onClick={() => setIsEditModalOpen(false)} className="p-3 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X className="w-5 h-5" /></button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-3">SKU (Lecture Seule)</label>
-                  <input readOnly type="text" value={editingProduct.id} className="w-full bg-slate-100 border border-slate-100 p-5 rounded-2xl text-[12px] font-black text-slate-400 outline-none" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-3">Désignation</label>
-                  <input required type="text" value={editingProduct.name} onChange={(e) => setEditingProduct({...editingProduct, name: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-3">Site</label>
-                  <select value={editingProduct.siteId} onChange={(e) => setEditingProduct({...editingProduct, siteId: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
-                    {sites.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-3">Prix Unitaire</label>
-                  <input type="number" value={editingProduct.unitPrice} onChange={(e) => setEditingProduct({...editingProduct, unitPrice: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-xl font-header italic outline-none" />
-                </div>
-              </div>
-              <button type="submit" className="w-full bg-blue-600 text-white py-8 rounded-[2.5rem] font-black text-[13px] uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-800 transition-all flex items-center justify-center gap-4">
-                <Save className="w-6 h-6" /> Mettre à jour la base
-              </button>
+              <button type="submit" className="w-full bg-[#1a3a22] text-white py-8 rounded-[2.5rem] font-black text-[13px] uppercase shadow-2xl hover:bg-emerald-900 transition-all">Enregistrer</button>
             </form>
           </div>
         )}
 
         {notifications.map(n => (
-          <div key={n.id} className={`fixed top-12 right-12 z-[3000] px-8 py-5 rounded-3xl shadow-2xl animate-slide-in flex items-center gap-4 ${n.type === 'success' ? 'bg-[#1a3a22] text-white' : n.type === 'warning' ? 'bg-amber-600 text-white' : 'bg-rose-600 text-white'}`}>
+          <div key={n.id} className={`fixed top-12 right-12 z-[3000] px-8 py-5 rounded-3xl shadow-2xl animate-slide-in flex items-center gap-4 ${n.type === 'success' ? 'bg-[#1a3a22] text-white' : 'bg-rose-600 text-white'}`}>
              <div className="w-2 h-2 rounded-full bg-white animate-ping"></div>
              <p className="text-[11px] font-black uppercase italic tracking-widest">{n.message}</p>
           </div>

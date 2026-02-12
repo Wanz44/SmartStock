@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, DollarSign, ShieldAlert, Database, 
   Save, Trash2, Download, RefreshCcw, BellRing,
@@ -13,13 +13,29 @@ interface SettingsViewProps {
   settings: AppSettings;
   onUpdateSettings: (newSettings: AppSettings) => void;
   onResetSystem: () => void;
+  notify: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
-export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: SettingsViewProps) => {
+export const SettingsView = ({ settings, onUpdateSettings, onResetSystem, notify }: SettingsViewProps) => {
   const [activeRibbon, setActiveRibbon] = useState<'IDENTITY' | 'EXCEL_STYLE' | 'SYSTEM'>('IDENTITY');
+  const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // Synchroniser avec les props si nécessaire (ex: backup importé)
+  useEffect(() => {
+    setLocalSettings(settings);
+    setHasChanges(false);
+  }, [settings]);
 
   const handleChange = (key: keyof AppSettings, value: any) => {
-    onUpdateSettings({ ...settings, [key]: value });
+    setLocalSettings(prev => ({ ...prev, [key]: value }));
+    setHasChanges(true);
+  };
+
+  const handleSave = () => {
+    onUpdateSettings(localSettings);
+    setHasChanges(false);
+    notify("Paramètres enregistrés avec succès !", "success");
   };
 
   const handleExportBackup = () => {
@@ -28,7 +44,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
       furniture: JSON.parse(localStorage.getItem('ss_furniture') || '[]'),
       history: JSON.parse(localStorage.getItem('ss_history') || '[]'),
       sites: JSON.parse(localStorage.getItem('ss_sites') || '[]'),
-      settings: settings
+      settings: localSettings
     };
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -39,7 +55,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
   };
 
   return (
-    <div className="space-y-10 animate-fade-in pb-32">
+    <div className="space-y-10 animate-fade-in pb-48 relative">
       {/* NAVIGATION DU RUBAN DE PARAMÈTRES */}
       <div className="bg-white p-2 rounded-[2rem] border border-slate-100 shadow-sm flex gap-2 no-print">
          {[
@@ -71,7 +87,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                          <input 
                             type="text" 
                             className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                            value={settings.enterpriseName}
+                            value={localSettings.enterpriseName}
                             onChange={(e) => handleChange('enterpriseName', e.target.value)}
                          />
                       </div>
@@ -80,8 +96,17 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                          <input 
                             type="text" 
                             className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                            value={settings.locationId}
+                            value={localSettings.locationId}
                             onChange={(e) => handleChange('locationId', e.target.value)}
+                         />
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Taux de Change (1$ = ? Fc)</label>
+                         <input 
+                            type="number" 
+                            className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                            value={localSettings.exchangeRate}
+                            onChange={(e) => handleChange('exchangeRate', Number(e.target.value))}
                          />
                       </div>
                    </div>
@@ -95,7 +120,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                          <input 
                             type="text" 
                             className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" 
-                            value={settings.printHeader}
+                            value={localSettings.printHeader}
                             onChange={(e) => handleChange('printHeader', e.target.value)}
                          />
                       </div>
@@ -104,7 +129,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                          <input 
                             type="text" 
                             className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" 
-                            value={settings.printFooter}
+                            value={localSettings.printFooter}
                             onChange={(e) => handleChange('printFooter', e.target.value)}
                          />
                       </div>
@@ -118,14 +143,14 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                       <EyeOff className="w-5 h-5 text-slate-400" />
                       <p className="text-[11px] font-black uppercase italic text-slate-600">Masquer Prix/Valeur</p>
                    </div>
-                   <input type="checkbox" className="w-5 h-5 accent-[#1a3a22]" checked={settings.maskSensitiveData} onChange={(e) => handleChange('maskSensitiveData', e.target.checked)} />
+                   <input type="checkbox" className="w-5 h-5 accent-[#1a3a22]" checked={localSettings.maskSensitiveData} onChange={(e) => handleChange('maskSensitiveData', e.target.checked)} />
                 </div>
                 <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between">
                    <div className="flex items-center gap-4">
                       <Hash className="w-5 h-5 text-slate-400" />
                       <p className="text-[11px] font-black uppercase italic text-slate-600">Numérotation Pages</p>
                    </div>
-                   <input type="checkbox" className="w-5 h-5 accent-[#1a3a22]" checked={settings.showPageNumbers} onChange={(e) => handleChange('showPageNumbers', e.target.checked)} />
+                   <input type="checkbox" className="w-5 h-5 accent-[#1a3a22]" checked={localSettings.showPageNumbers} onChange={(e) => handleChange('showPageNumbers', e.target.checked)} />
                 </div>
              </div>
           </div>
@@ -133,7 +158,6 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
 
         {activeRibbon === 'EXCEL_STYLE' && (
           <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-12 animate-fade-in">
-             {/* RUBAN POLICE & TAILLE */}
              <div className="space-y-6">
                 <div className="flex items-center gap-3 text-slate-400 mb-4">
                    <Type className="w-5 h-5" />
@@ -144,7 +168,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                       <label className="text-[8px] font-black uppercase text-slate-300 ml-1">Famille de police</label>
                       <select 
                         className="w-full bg-slate-50 border border-slate-100 p-4 rounded-xl text-[12px] font-bold outline-none"
-                        value={settings.printFontFamily}
+                        value={localSettings.printFontFamily}
                         onChange={(e) => handleChange('printFontFamily', e.target.value)}
                       >
                          <option value="Calibri">Calibri (Standard Excel)</option>
@@ -159,27 +183,26 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                         type="number" 
                         min="6" max="16" 
                         className="w-full bg-slate-50 border border-slate-100 p-4 rounded-xl text-center text-lg font-header italic outline-none"
-                        value={settings.printFontSize}
+                        value={localSettings.printFontSize}
                         onChange={(e) => handleChange('printFontSize', Number(e.target.value))}
                       />
                    </div>
                    <div className="flex items-center gap-4 pt-6">
                       <button 
-                        onClick={() => handleChange('printBoldHeaders', !settings.printBoldHeaders)}
-                        className={`w-12 h-12 rounded-xl border flex items-center justify-center font-black transition-all ${settings.printBoldHeaders ? 'bg-[#1a3a22] text-white border-[#1a3a22]' : 'bg-white border-slate-100 text-slate-300'}`}
+                        onClick={() => handleChange('printBoldHeaders', !localSettings.printBoldHeaders)}
+                        className={`w-12 h-12 rounded-xl border flex items-center justify-center font-black transition-all ${localSettings.printBoldHeaders ? 'bg-[#1a3a22] text-white border-[#1a3a22]' : 'bg-white border-slate-100 text-slate-300'}`}
                       >
                         G
                       </button>
                       <div className="h-10 w-px bg-slate-100" />
                       <div className="space-y-2">
                         <label className="text-[8px] font-black uppercase text-slate-300 ml-1">Padding Cellules</label>
-                        <input type="range" min="2" max="16" value={settings.printCellPadding} onChange={(e) => handleChange('printCellPadding', Number(e.target.value))} className="w-32 accent-[#1a3a22]" />
+                        <input type="range" min="2" max="16" value={localSettings.printCellPadding} onChange={(e) => handleChange('printCellPadding', Number(e.target.value))} className="w-32 accent-[#1a3a22]" />
                       </div>
                    </div>
                 </div>
              </div>
 
-             {/* RUBAN STYLES & CELLULES */}
              <div className="space-y-6 pt-10 border-t border-slate-50">
                 <div className="flex items-center gap-3 text-slate-400 mb-4">
                    <Palette className="w-5 h-5" />
@@ -193,7 +216,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                             <p className="text-[10px] font-black uppercase text-slate-700">Mise en forme conditionnelle</p>
                             <p className="text-[8px] font-bold text-slate-400 uppercase italic">Rouge/Vert auto sur impression</p>
                          </div>
-                         <input type="checkbox" className="w-5 h-5 accent-emerald-500" checked={settings.printConditionalFormatting} onChange={(e) => handleChange('printConditionalFormatting', e.target.checked)} />
+                         <input type="checkbox" className="w-5 h-5 accent-emerald-500" checked={localSettings.printConditionalFormatting} onChange={(e) => handleChange('printConditionalFormatting', e.target.checked)} />
                       </div>
 
                       <div className="space-y-2">
@@ -203,7 +226,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                               <button 
                                 key={c} 
                                 onClick={() => handleChange('printThemeColor', c)} 
-                                className={`w-8 h-8 rounded-full border-2 transition-all ${settings.printThemeColor === c ? 'border-blue-500 scale-125' : 'border-transparent'}`} 
+                                className={`w-8 h-8 rounded-full border-2 transition-all ${localSettings.printThemeColor === c ? 'border-blue-500 scale-125' : 'border-transparent'}`} 
                                 style={{backgroundColor: c}} 
                               />
                             ))}
@@ -219,7 +242,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                               <button 
                                 key={c} 
                                 onClick={() => handleChange('printStripeColor', c)} 
-                                className={`w-10 h-10 rounded-xl border transition-all ${settings.printStripeColor === c ? 'border-emerald-500 ring-2 ring-emerald-100' : 'border-slate-100'}`} 
+                                className={`w-10 h-10 rounded-xl border transition-all ${localSettings.printStripeColor === c ? 'border-emerald-500 ring-2 ring-emerald-100' : 'border-slate-100'}`} 
                                 style={{backgroundColor: c}} 
                               />
                             ))}
@@ -233,7 +256,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
                               <button 
                                 key={w} 
                                 onClick={() => handleChange('printBorderWidth', w)}
-                                className={`flex-1 py-3 rounded-xl border text-[9px] font-black uppercase tracking-tighter ${settings.printBorderWidth === w ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
+                                className={`flex-1 py-3 rounded-xl border text-[9px] font-black uppercase tracking-tighter ${localSettings.printBorderWidth === w ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
                               >
                                 {w === 0 ? 'Aucune' : w === 1 ? 'Fine' : 'Moyenne'}
                               </button>
@@ -248,24 +271,24 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
              <div className="pt-10 border-t border-slate-50">
                 <p className="text-[9px] font-black uppercase text-slate-300 mb-4 tracking-[0.2em] text-center">Aperçu du Rendu Impression</p>
                 <div className="bg-white border border-slate-200 p-8 rounded-2xl shadow-inner scale-90 mx-auto max-w-lg origin-center">
-                   <table className="w-full" style={{fontFamily: settings.printFontFamily, fontSize: `${settings.printFontSize}pt`, borderCollapse: 'collapse'}}>
+                   <table className="w-full" style={{fontFamily: localSettings.printFontFamily, fontSize: `${localSettings.printFontSize}pt`, borderCollapse: 'collapse'}}>
                       <thead>
-                         <tr style={{backgroundColor: settings.printThemeColor, color: 'white', fontWeight: settings.printBoldHeaders ? 'bold' : 'normal'}}>
-                            <th style={{border: `${settings.printBorderWidth}px solid #333`, padding: `${settings.printCellPadding}px`}}>SKU</th>
-                            <th style={{border: `${settings.printBorderWidth}px solid #333`, padding: `${settings.printCellPadding}px`}}>DÉSIGNATION</th>
-                            <th style={{border: `${settings.printBorderWidth}px solid #333`, padding: `${settings.printCellPadding}px`}}>STOCK</th>
+                         <tr style={{backgroundColor: localSettings.printThemeColor, color: 'white', fontWeight: localSettings.printBoldHeaders ? 'bold' : 'normal'}}>
+                            <th style={{border: `${localSettings.printBorderWidth}px solid #333`, padding: `${localSettings.printCellPadding}px`}}>SKU</th>
+                            <th style={{border: `${localSettings.printBorderWidth}px solid #333`, padding: `${localSettings.printCellPadding}px`}}>DÉSIGNATION</th>
+                            <th style={{border: `${localSettings.printBorderWidth}px solid #333`, padding: `${localSettings.printCellPadding}px`}}>STOCK</th>
                          </tr>
                       </thead>
                       <tbody>
                          <tr>
-                            <td style={{border: `${settings.printBorderWidth}px solid #ccc`, padding: `${settings.printCellPadding}px`}}>S-01</td>
-                            <td style={{border: `${settings.printBorderWidth}px solid #ccc`, padding: `${settings.printCellPadding}px`}}>Exemple Article</td>
-                            <td style={{border: `${settings.printBorderWidth}px solid #ccc`, padding: `${settings.printCellPadding}px`, color: settings.printConditionalFormatting ? '#b91c1c' : 'inherit'}}>12 (Critique)</td>
+                            <td style={{border: `${localSettings.printBorderWidth}px solid #ccc`, padding: `${localSettings.printCellPadding}px`}}>S-01</td>
+                            <td style={{border: `${localSettings.printBorderWidth}px solid #ccc`, padding: `${localSettings.printCellPadding}px`}}>Exemple Article</td>
+                            <td style={{border: `${localSettings.printBorderWidth}px solid #ccc`, padding: `${localSettings.printCellPadding}px`, color: localSettings.printConditionalFormatting ? '#b91c1c' : 'inherit'}}>12 (Critique)</td>
                          </tr>
-                         <tr style={{backgroundColor: settings.printStripeColor}}>
-                            <td style={{border: `${settings.printBorderWidth}px solid #ccc`, padding: `${settings.printCellPadding}px`}}>S-02</td>
-                            <td style={{border: `${settings.printBorderWidth}px solid #ccc`, padding: `${settings.printCellPadding}px`}}>Second Article</td>
-                            <td style={{border: `${settings.printBorderWidth}px solid #ccc`, padding: `${settings.printCellPadding}px`}}>54</td>
+                         <tr style={{backgroundColor: localSettings.printStripeColor}}>
+                            <td style={{border: `${localSettings.printBorderWidth}px solid #ccc`, padding: `${localSettings.printCellPadding}px`}}>S-02</td>
+                            <td style={{border: `${localSettings.printBorderWidth}px solid #ccc`, padding: `${localSettings.printCellPadding}px`}}>Second Article</td>
+                            <td style={{border: `${localSettings.printBorderWidth}px solid #ccc`, padding: `${localSettings.printCellPadding}px`}}>54</td>
                          </tr>
                       </tbody>
                    </table>
@@ -303,6 +326,18 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem }: Sett
           </div>
         )}
       </div>
+
+      {/* BOUTON DE SAUVEGARDE FLOTTANT */}
+      {hasChanges && (
+        <div className="fixed bottom-12 right-12 z-[1000] animate-slide-in no-print">
+          <button 
+            onClick={handleSave}
+            className="flex items-center gap-4 px-10 py-6 bg-[#1a3a22] text-white rounded-[2rem] font-black text-[12px] uppercase tracking-widest shadow-[0_20px_50px_rgba(26,58,34,0.3)] hover:bg-emerald-800 transition-all hover:scale-105 active:scale-95"
+          >
+            <Save className="w-5 h-5" /> Enregistrer les modifications
+          </button>
+        </div>
+      )}
     </div>
   );
 };
