@@ -58,7 +58,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   printStripeColor: '#f0fdf4',
   printBorderWidth: 1,
   printConditionalFormatting: true,
-  printCellPadding: 8
+  printCellPadding: 8,
+  notificationsEnabled: true
 };
 
 const getViewTitle = (view: ViewType): string => {
@@ -192,6 +193,11 @@ export default function App() {
 
     setProducts(products.map(p => p.id === prodId ? { ...p, currentStock: finalStock, lastInventoryDate: new Date().toISOString() } : p));
     
+    // Logic for pushing notifications when threshold is reached
+    if (settings.notificationsEnabled && finalStock <= product.minStock) {
+      notify(`Alerte Stock Bas : ${product.name} (${finalStock} ${product.unit} restant)`, 'warning');
+    }
+
     const newLog: InventoryLog = { 
       id: `LOG-${Date.now()}`.toUpperCase(),
       date: new Date().toISOString(), type, productId: prodId, productName: product.name, 
@@ -359,7 +365,7 @@ export default function App() {
           <NavItem active={activeView === 'furniture'} onClick={() => setActiveView('furniture')} icon={Lamp} label="Mobilier" />
           <NavItem active={activeView === 'sites'} onClick={() => setActiveView('sites')} icon={MapPin} label="Sites" />
           <NavItem active={activeView === 'suppliers'} onClick={() => setActiveView('suppliers')} icon={Truck} label="Fournisseurs" />
-          <NavItem active={activeView === 'audit'} onClick={() => setActiveView('audit'} icon={CheckSquare} label="Audit & Écarts" />
+          <NavItem active={activeView === 'audit'} onClick={() => setActiveView('audit')} icon={CheckSquare} label="Audit & Écarts" />
           <NavItem active={activeView === 'traceability'} onClick={() => setActiveView('traceability')} icon={HistoryIcon} label="Historique" />
           <NavItem active={activeView === 'tasks'} onClick={() => setActiveView('tasks')} icon={CheckSquare} label="Agenda" alertCount={tasks.filter(t => t.status === 'En attente').length} />
           <NavItem active={activeView === 'needs_list'} onClick={() => setActiveView('needs_list')} icon={ShoppingCart} label="Besoins" />
@@ -518,7 +524,7 @@ export default function App() {
         )}
 
         {notifications.map(n => (
-          <div key={n.id} className={`fixed top-12 right-12 z-[3000] px-8 py-5 rounded-3xl shadow-2xl animate-slide-in flex items-center gap-4 ${n.type === 'success' ? 'bg-[#1a3a22] text-white' : 'bg-rose-600 text-white'}`}>
+          <div key={n.id} className={`fixed top-12 right-12 z-[3000] px-8 py-5 rounded-3xl shadow-2xl animate-slide-in flex items-center gap-4 ${n.type === 'success' ? 'bg-[#1a3a22] text-white' : n.type === 'warning' ? 'bg-amber-600 text-white' : 'bg-rose-600 text-white'}`}>
              <div className="w-2 h-2 rounded-full bg-white animate-ping"></div>
              <p className="text-[11px] font-black uppercase italic tracking-widest">{n.message}</p>
           </div>

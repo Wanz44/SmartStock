@@ -39,6 +39,7 @@ export interface AppSettings {
   printBorderWidth: number;
   printConditionalFormatting: boolean;
   printCellPadding: number;
+  notificationsEnabled: boolean;
 }
 
 export interface Product {

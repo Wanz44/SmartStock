@@ -6,7 +6,7 @@ import {
   MapPin, Globe, List, Plus, Edit3, Check, X,
   Printer, Layout, EyeOff, Hash, Type, 
   Maximize, Minimize, Paintbrush, Palette, TableProperties,
-  FileText, AlignLeft, AlignCenter
+  FileText, AlignLeft, AlignCenter, Bell
 } from 'lucide-react';
 import { AppSettings } from './types';
 
@@ -149,20 +149,62 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem, notify
                 </div>
              </div>
 
-             <div className="pt-10 border-t border-slate-50 flex flex-wrap gap-4">
-                <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between">
-                   <div className="flex items-center gap-4">
-                      <EyeOff className="w-5 h-5 text-slate-400" />
-                      <p className="text-[11px] font-black uppercase italic text-slate-600">Masquer Prix/Valeur</p>
-                   </div>
-                   <input type="checkbox" className="w-5 h-5 accent-[#1a3a22]" checked={localSettings.maskSensitiveData} onChange={(e) => handleChange('maskSensitiveData', e.target.checked)} />
-                </div>
-                <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between">
-                   <div className="flex items-center gap-4">
-                      <Hash className="w-5 h-5 text-slate-400" />
-                      <p className="text-[11px] font-black uppercase italic text-slate-600">Numérotation Pages</p>
-                   </div>
-                   <input type="checkbox" className="w-5 h-5 accent-[#1a3a22]" checked={localSettings.showPageNumbers} onChange={(e) => handleChange('showPageNumbers', e.target.checked)} />
+             <div className="pt-10 border-t border-slate-50 space-y-6">
+                <h3 className="text-xl font-header italic uppercase text-slate-900 border-l-4 border-emerald-500 pl-4">Notifications & Alertes</h3>
+                <div className="flex flex-wrap gap-4">
+                  <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between group">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white rounded-2xl shadow-sm text-amber-500 group-hover:bg-amber-500 group-hover:text-white transition-all">
+                          <Bell className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-black uppercase italic text-slate-900 leading-none">Alertes Stock Critique</p>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Notification push en cas de seuil bas</p>
+                        </div>
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      className="w-6 h-6 accent-[#1a3a22] cursor-pointer" 
+                      checked={localSettings.notificationsEnabled} 
+                      onChange={(e) => handleChange('notificationsEnabled', e.target.checked)} 
+                    />
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between group">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:bg-[#1a3a22] group-hover:text-white transition-all">
+                          <EyeOff className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-black uppercase italic text-slate-900 leading-none">Masquer Données Sensibles</p>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Cache les prix et valeurs globales</p>
+                        </div>
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      className="w-6 h-6 accent-[#1a3a22] cursor-pointer" 
+                      checked={localSettings.maskSensitiveData} 
+                      onChange={(e) => handleChange('maskSensitiveData', e.target.checked)} 
+                    />
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between group">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:bg-[#1a3a22] group-hover:text-white transition-all">
+                          <Hash className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-black uppercase italic text-slate-900 leading-none">Numérotation Pages</p>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Affiche "Page X/Y" sur impression</p>
+                        </div>
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      className="w-6 h-6 accent-[#1a3a22] cursor-pointer" 
+                      checked={localSettings.showPageNumbers} 
+                      onChange={(e) => handleChange('showPageNumbers', e.target.checked)} 
+                    />
+                  </div>
                 </div>
              </div>
           </div>
@@ -209,7 +251,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem, notify
                       <div className="h-10 w-px bg-slate-100" />
                       <div className="space-y-2">
                         <label className="text-[8px] font-black uppercase text-slate-300 ml-1">Padding Cellules</label>
-                        <input type="range" min="2" max="16" value={localSettings.printCellPadding} onChange={(e) => handleChange('printCellPadding', Number(e.target.value))} className="w-32 accent-[#1a3a22]" />
+                        <input type="range" min="2" max="16" value={localSettings.printCellPadding} onChange={(e) => handleChange('printCellPadding', Number(e.target.value)} className="w-32 accent-[#1a3a22]" />
                       </div>
                    </div>
                 </div>
