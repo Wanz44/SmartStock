@@ -23,9 +23,24 @@ export interface AppSettings {
   locationId: string;
   exchangeRate: number;
   primaryCurrency: 'Fc' | '$';
-  defaultSafetyMargin: number; // en %
+  defaultSafetyMargin: number;
   autoBackup: boolean;
-  units: string[]; // Liste des unités gérables
+  units: string[];
+  // Réglages d'impression de base
+  printHeader: string;
+  printFooter: string;
+  maskSensitiveData: boolean;
+  printModel: 'classic' | 'excel-green' | 'modern-dark';
+  showPageNumbers: boolean;
+  // Mise en forme avancée (Style Excel)
+  printFontFamily: 'Calibri' | 'Inter' | 'Plus Jakarta Sans' | 'Courier New';
+  printFontSize: number;
+  printBoldHeaders: boolean;
+  printThemeColor: string;
+  printStripeColor: string;
+  printBorderWidth: number;
+  printConditionalFormatting: boolean; // Mise en forme conditionnelle auto
+  printCellPadding: number;
 }
 
 export interface Product {
@@ -34,7 +49,7 @@ export interface Product {
   category: string;
   currentStock: number;
   minStock: number;
-  monthlyNeed: number; // Besoin Standard
+  monthlyNeed: number;
   unit: string;
   unitPrice: number;
   currency: 'Fc' | '$';
@@ -76,7 +91,7 @@ export interface FurnitureAuditSession {
 }
 
 export interface InventoryLog {
-  id: string; // ID_Transaction
+  id: string;
   date: string;
   type: 'entry' | 'exit' | 'transfer' | 'adjustment';
   productId: string;
@@ -84,7 +99,7 @@ export interface InventoryLog {
   changeAmount: number;
   finalStock: number;
   siteId: string;
-  targetSiteId?: string; // Pour les transferts
+  targetSiteId?: string;
   reason?: string;
   responsible: string;
   isAnomaly?: boolean;
@@ -125,29 +140,27 @@ export interface Task {
 export type ViewType = 
   | 'dashboard' 
   | 'inventory' 
-  | 'movements'
   | 'furniture' 
-  | 'traceability' 
-  | 'needs_list' 
-  | 'suppliers' 
   | 'sites' 
+  | 'suppliers' 
+  | 'audit'
+  | 'traceability' 
+  | 'tasks'
+  | 'needs_list' 
   | 'analytics' 
-  | 'import' 
   | 'settings'
-  | 'audit_session'
-  | 'transfers'
-  | 'tasks';
+  | 'movements';
 
 export interface RapportAutomatique {
   summary: string;
   criticalAlerts: string[];
   recommendations: string[];
   financialProjection: string;
-  chartData: { label: string; valeur: number }[]; // Valeur par catégorie
-  topConsumption: { label: string; valeur: number }[]; // Plus consommés
-  siteValueData: { label: string; valeur: number }[]; // Valeur par site
-  siteExpenseData: { label: string; valeur: number }[]; // Dépenses par site
-  monthlyExpenseData: { label: string; valeur: number }[]; // Dépenses par mois
+  chartData: { label: string; valeur: number }[];
+  topConsumption: { label: string; valeur: number }[];
+  siteValueData: { label: string; valeur: number }[];
+  siteExpenseData: { label: string; valeur: number }[];
+  monthlyExpenseData: { label: string; valeur: number }[];
   healthIndicators: { siteName: string; status: 'green' | 'orange' | 'red'; score: number }[];
   balanceAnalysis: { isPositive: boolean; message: string; ratio: number };
   generatedAt: string;
