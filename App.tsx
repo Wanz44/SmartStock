@@ -61,6 +61,25 @@ const DEFAULT_SETTINGS: AppSettings = {
   printCellPadding: 8
 };
 
+const getViewTitle = (view: ViewType): string => {
+  switch (view) {
+    case 'dashboard': return 'Tableau de Bord';
+    case 'inventory': return 'Consommables';
+    case 'furniture': return 'Mobilier';
+    case 'sites': return 'Sites Logistiques';
+    case 'suppliers': return 'Fournisseurs';
+    case 'audit': return 'Audit & Écarts';
+    case 'traceability': return 'Historique';
+    case 'tasks': return 'Agenda Tâches';
+    case 'needs_list': return 'État de Besoins';
+    case 'analytics': return 'Analyses IA';
+    case 'trash': return 'Corbeille Archive';
+    case 'settings': return 'Paramètres';
+    case 'movements': return 'Mouvements Stock';
+    default: return 'SmartStock ERP';
+  }
+};
+
 interface Notification {
   id: number;
   message: string;
@@ -128,7 +147,7 @@ export default function App() {
     setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
   };
 
-  const handleTransaction = (prodId: string, amount: number, reason: string, type: 'entry' | 'exit' | 'adjustment' = 'adjustment') => {
+  const handleTransaction = (prodId: string, amount: number, reason: string, type: 'entry' | 'exit' | 'adjustment' | 'transfer' = 'adjustment') => {
     const product = products.find(p => p.id === prodId);
     if (!product) return;
     const finalStock = product.currentStock + amount;
@@ -147,7 +166,7 @@ export default function App() {
   const handleAddProduct = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (sites.length === 0) return notify("Créez un site d'abord", "error");
-    const id = newProductData.id || `SKU-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const id = newProductData.id || `RÉF-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     const product: Product = {
       id, name: newProductData.name.toUpperCase(), category: newProductData.category, 
       currentStock: Number(newProductData.initialStock), minStock: Number(newProductData.minStock), 
@@ -162,7 +181,6 @@ export default function App() {
     notify(`Produit "${product.name}" ajouté.`);
   };
 
-  // LOGIQUE DE LA CORBEILLE
   const handleMoveProductToTrash = (id: string) => {
     const prod = products.find(p => p.id === id);
     if (!prod) return;
@@ -174,7 +192,6 @@ export default function App() {
   const handleRestoreProduct = (id: string) => {
     const prod = deletedProducts.find(p => p.id === id);
     if (!prod) return;
-    // Vérifier si le site existe encore
     const siteExists = sites.find(s => s.id === prod.siteId);
     const finalProd = siteExists ? prod : { ...prod, siteId: sites[0]?.id || 'SITE-01' };
     setProducts([...products, finalProd]);
@@ -205,7 +222,6 @@ export default function App() {
     notify(`"${item.name}" restauré avec succès.`);
   };
 
-  // IMPORTATION MOBILIER AVEC CRÉATION DE SITES
   const handleImportFurniture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -302,11 +318,11 @@ export default function App() {
           <NavItem active={activeView === 'furniture'} onClick={() => setActiveView('furniture')} icon={Lamp} label="Mobilier" />
           <NavItem active={activeView === 'sites'} onClick={() => setActiveView('sites')} icon={MapPin} label="Sites" />
           <NavItem active={activeView === 'suppliers'} onClick={() => setActiveView('suppliers')} icon={Truck} label="Fournisseurs" />
-          <NavItem active={activeView === 'audit'} onClick={() => setActiveView('audit')} icon={CheckSquare} label="Audit" />
+          <NavItem active={activeView === 'audit'} onClick={() => setActiveView('audit')} icon={CheckSquare} label="Audit & Écarts" />
           <NavItem active={activeView === 'traceability'} onClick={() => setActiveView('traceability')} icon={HistoryIcon} label="Historique" />
           <NavItem active={activeView === 'tasks'} onClick={() => setActiveView('tasks')} icon={CheckSquare} label="Agenda" alertCount={tasks.filter(t => t.status === 'En attente').length} />
           <NavItem active={activeView === 'needs_list'} onClick={() => setActiveView('needs_list')} icon={ShoppingCart} label="Besoins" />
-          <NavItem active={activeView === 'analytics'} onClick={() => setActiveView('analytics')} icon={FileBarChart} label="Analyses" />
+          <NavItem active={activeView === 'analytics'} onClick={() => setActiveView('analytics')} icon={FileBarChart} label="Analyses IA" />
           <NavItem active={activeView === 'trash'} onClick={() => setActiveView('trash')} icon={Trash2} label="Corbeille" alertCount={deletedProducts.length + deletedFurniture.length} />
           <NavItem active={activeView === 'settings'} onClick={() => setActiveView('settings')} icon={Settings} label="Paramètres" />
         </nav>
@@ -320,7 +336,7 @@ export default function App() {
           <div>
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">{settings.enterpriseName}</p>
             <h2 className="text-[44px] font-header text-slate-900 leading-none italic uppercase">
-              {activeView === 'trash' ? 'Corbeille Archive' : activeView}
+              {getViewTitle(activeView)}
             </h2>
           </div>
         </header>
@@ -329,7 +345,20 @@ export default function App() {
           {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setActiveView} />}
           {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={() => setActiveView('movements')} onEdit={(p) => { setEditingProduct(p); setIsEditModalOpen(true); }} onImport={() => {}} onAdd={() => setIsAddModalOpen(true)} onDelete={handleMoveProductToTrash} />}
           {activeView === 'furniture' && <FurnitureView furniture={furniture} setFurniture={setFurniture} furnitureAudits={furnitureAudits} setFurnitureAudits={setFurnitureAudits} sites={sites} notify={notify} onImportFurniture={handleImportFurniture} />}
-          {activeView === 'sites' && <SitesView sites={sites} setSites={setSites} products={products} onAddProduct={(sid) => { setNewProductData({...newProductData, siteId: sid}); setIsAddModalOpen(true); }} onAddFurniture={(sid) => setActiveView('furniture')} />}
+          {activeView === 'sites' && (
+            <SitesView 
+              sites={sites} 
+              setSites={setSites} 
+              products={products} 
+              setProducts={setProducts}
+              furniture={furniture}
+              setFurniture={setFurniture}
+              onAddProduct={(sid) => { setNewProductData({...newProductData, siteId: sid}); setIsAddModalOpen(true); }} 
+              onAddFurniture={(sid) => { setActiveView('furniture'); }} 
+              notify={notify}
+              onTransaction={handleTransaction}
+            />
+          )}
           {activeView === 'suppliers' && <SuppliersView suppliers={suppliers} setSuppliers={setSuppliers} notify={notify} />}
           {activeView === 'audit' && <AuditView products={products} sites={sites} exchangeRate={settings.exchangeRate} onUpdateStock={handleTransaction} notify={notify} />}
           {activeView === 'traceability' && <GlobalHistoryView history={history} needsHistory={needsHistory} furnitureAudits={furnitureAudits} sites={sites} products={products} settings={settings} />}
@@ -350,13 +379,19 @@ export default function App() {
                 <button type="button" onClick={() => setIsAddModalOpen(false)} className="p-3 bg-slate-100 rounded-full hover:bg-slate-200"><X className="w-5 h-5" /></button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <input required type="text" placeholder="NOM DE L'ARTICLE" value={newProductData.name} onChange={(e) => setNewProductData({...newProductData, name: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none" />
-                <select required value={newProductData.siteId} onChange={(e) => setNewProductData({...newProductData, siteId: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
-                  {sites.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
-                </select>
-                <input type="number" placeholder="STOCK INITIAL" value={newProductData.initialStock} onChange={(e) => setNewProductData({...newProductData, initialStock: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
+                <input required type="text" placeholder="DÉSIGNATION DE L'ARTICLE" value={newProductData.name} onChange={(e) => setNewProductData({...newProductData, name: e.target.value})} className="col-span-2 w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none" />
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Site de stockage</label>
+                  <select required value={newProductData.siteId} onChange={(e) => setNewProductData({...newProductData, siteId: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
+                    {sites.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Stock Initial</label>
+                  <input type="number" placeholder="0" value={newProductData.initialStock} onChange={(e) => setNewProductData({...newProductData, initialStock: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
+                </div>
               </div>
-              <button type="submit" className="w-full bg-[#1a3a22] text-white py-8 rounded-[2.5rem] font-black text-[13px] uppercase shadow-2xl hover:bg-emerald-900 transition-all">Enregistrer</button>
+              <button type="submit" className="w-full bg-[#1a3a22] text-white py-8 rounded-[2.5rem] font-black text-[13px] uppercase shadow-2xl hover:bg-emerald-900 transition-all">Enregistrer en Base</button>
             </form>
           </div>
         )}

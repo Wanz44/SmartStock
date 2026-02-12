@@ -48,7 +48,7 @@ export const LoginView = ({ enterpriseName, onLogin }: LoginViewProps) => {
             
             <div className="text-center">
               <p className="text-[12px] font-header italic text-slate-500 tracking-tight">
-                By <span className="text-[#1a3a22] font-black">Bereckya MAYELE</span> logistics
+                Par <span className="text-[#1a3a22] font-black">Bereckya MAYELE</span> logistique
               </p>
             </div>
           </div>
@@ -56,7 +56,7 @@ export const LoginView = ({ enterpriseName, onLogin }: LoginViewProps) => {
 
         <div className="mt-12 text-center border-t border-slate-50 pt-8">
           <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-300">
-            SmartStock Pro Hub - Enterprise Edition
+            SmartStock Pro Hub - Édition Entreprise
           </p>
         </div>
       </div>

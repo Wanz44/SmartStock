@@ -5,7 +5,8 @@ import {
   Save, Trash2, Download, RefreshCcw, BellRing,
   MapPin, Globe, List, Plus, Edit3, Check, X,
   Printer, Layout, EyeOff, Hash, Type, 
-  Maximize, Minimize, Paintbrush, Palette, TableProperties
+  Maximize, Minimize, Paintbrush, Palette, TableProperties,
+  FileText, AlignLeft, AlignCenter
 } from 'lucide-react';
 import { AppSettings } from './types';
 
@@ -113,25 +114,36 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem, notify
                 </div>
 
                 <div className="space-y-6">
-                   <h3 className="text-xl font-header italic uppercase text-slate-900 border-l-4 border-emerald-500 pl-4">En-tête & Pied de page</h3>
+                   <h3 className="text-xl font-header italic uppercase text-slate-900 border-l-4 border-emerald-500 pl-4">Configuration des Rapports</h3>
                    <div className="space-y-4">
                       <div className="space-y-2">
-                         <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Texte d'En-tête des Rapports</label>
-                         <input 
-                            type="text" 
-                            className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" 
+                         <label className="text-[9px] font-black uppercase text-slate-400 ml-2 flex items-center gap-2">
+                            <AlignLeft className="w-3 h-3" /> En-tête Personnalisé (Print)
+                         </label>
+                         <textarea 
+                            rows={2}
+                            className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22] resize-none" 
+                            placeholder="ex: REGISTRE OFFICIEL DE STOCK ET PATRIMOINE"
                             value={localSettings.printHeader}
                             onChange={(e) => handleChange('printHeader', e.target.value)}
                          />
                       </div>
                       <div className="space-y-2">
-                         <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Texte de Pied de Page (Signatures)</label>
-                         <input 
-                            type="text" 
-                            className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" 
+                         <label className="text-[9px] font-black uppercase text-slate-400 ml-2 flex items-center gap-2">
+                            <AlignCenter className="w-3 h-3" /> Pied de Page / Signatures (Print)
+                         </label>
+                         <textarea 
+                            rows={2}
+                            className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22] resize-none" 
+                            placeholder="ex: Document généré par SmartStock Pro ERP System"
                             value={localSettings.printFooter}
                             onChange={(e) => handleChange('printFooter', e.target.value)}
                          />
+                      </div>
+                      <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                         <p className="text-[8px] font-black uppercase text-amber-700 italic flex items-center gap-2">
+                            <FileText className="w-3 h-3" /> Ces textes apparaîtront sur tous les PDF et impressions.
+                         </p>
                       </div>
                    </div>
                 </div>
