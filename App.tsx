@@ -141,6 +141,8 @@ export default function App() {
     monthlyNeed: 20
   });
 
+  const [editProductData, setEditProductData] = useState<Product | null>(null);
+
   const [isFirstLaunch, setIsFirstLaunch] = useState(() => products.length === 0 && sites.length === 0);
 
   const notify = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
@@ -323,6 +325,15 @@ export default function App() {
     notify(`Produit "${product.name}" ajouté.`);
   };
 
+  const handleUpdateProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editProductData) return;
+    setProducts(products.map(p => p.id === editProductData.id ? editProductData : p));
+    setIsEditModalOpen(false);
+    setEditProductData(null);
+    notify(`Produit "${editProductData.name}" mis à jour.`);
+  };
+
   if (isFirstLaunch) return (
     <div className="min-h-screen flex items-center justify-center bg-[#1a3a22] p-6">
       <div className="bg-white w-full max-w-md rounded-[3rem] p-12 shadow-2xl text-center">
@@ -348,7 +359,7 @@ export default function App() {
           <NavItem active={activeView === 'furniture'} onClick={() => setActiveView('furniture')} icon={Lamp} label="Mobilier" />
           <NavItem active={activeView === 'sites'} onClick={() => setActiveView('sites')} icon={MapPin} label="Sites" />
           <NavItem active={activeView === 'suppliers'} onClick={() => setActiveView('suppliers')} icon={Truck} label="Fournisseurs" />
-          <NavItem active={activeView === 'audit'} onClick={() => setActiveView('audit')} icon={CheckSquare} label="Audit & Écarts" />
+          <NavItem active={activeView === 'audit'} onClick={() => setActiveView('audit'} icon={CheckSquare} label="Audit & Écarts" />
           <NavItem active={activeView === 'traceability'} onClick={() => setActiveView('traceability')} icon={HistoryIcon} label="Historique" />
           <NavItem active={activeView === 'tasks'} onClick={() => setActiveView('tasks')} icon={CheckSquare} label="Agenda" alertCount={tasks.filter(t => t.status === 'En attente').length} />
           <NavItem active={activeView === 'needs_list'} onClick={() => setActiveView('needs_list')} icon={ShoppingCart} label="Besoins" />
@@ -373,7 +384,7 @@ export default function App() {
 
         <section className="animate-fade-in">
           {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setActiveView} logisticsBalance={logisticsBalance} />}
-          {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={() => setActiveView('movements')} onEdit={(p) => { setEditingProduct(p); setIsEditModalOpen(true); }} onImport={handleImportProducts} onAdd={() => setIsAddModalOpen(true)} onDelete={(id) => setProducts(products.filter(p => p.id !== id))} />}
+          {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={() => setActiveView('movements')} onEdit={(p) => { setEditProductData(p); setIsEditModalOpen(true); }} onImport={handleImportProducts} onAdd={() => setIsAddModalOpen(true)} onDelete={(id) => setProducts(products.filter(p => p.id !== id))} />}
           {activeView === 'furniture' && <FurnitureView furniture={furniture} setFurniture={setFurniture} furnitureAudits={furnitureAudits} setFurnitureAudits={setFurnitureAudits} sites={sites} notify={notify} onImportFurniture={handleImportFurniture} />}
           {activeView === 'sites' && (
             <SitesView 
@@ -412,6 +423,7 @@ export default function App() {
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Site de stockage</label>
                   <select required value={newProductData.siteId} onChange={(e) => setNewProductData({...newProductData, siteId: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
+                    <option value="">Sélectionner un site</option>
                     {sites.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
                   </select>
                 </div>
@@ -419,8 +431,88 @@ export default function App() {
                   <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Stock Initial</label>
                   <input type="number" placeholder="0" value={newProductData.initialStock} onChange={(e) => setNewProductData({...newProductData, initialStock: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Catégorie</label>
+                  <select required value={newProductData.category} onChange={(e) => setNewProductData({...newProductData, category: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
+                    {INITIAL_CATEGORIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Unité</label>
+                  <select required value={newProductData.unit} onChange={(e) => setNewProductData({...newProductData, unit: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
+                    {settings.units.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Prix Unitaire</label>
+                  <div className="flex gap-2">
+                    <input type="number" step="any" required value={newProductData.unitPrice} onChange={(e) => setNewProductData({...newProductData, unitPrice: Number(e.target.value)})} className="flex-1 bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
+                    <select value={newProductData.currency} onChange={(e) => setNewProductData({...newProductData, currency: e.target.value as 'Fc' | '$'})} className="bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none w-20">
+                      <option value="Fc">Fc</option>
+                      <option value="$">$</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Stock Minimum (Alerte)</label>
+                  <input type="number" required value={newProductData.minStock} onChange={(e) => setNewProductData({...newProductData, minStock: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
+                </div>
               </div>
               <button type="submit" className="w-full bg-[#1a3a22] text-white py-8 rounded-[2.5rem] font-black text-[13px] uppercase shadow-2xl hover:bg-emerald-900 transition-all">Enregistrer en Base</button>
+            </form>
+          </div>
+        )}
+
+        {isEditModalOpen && editProductData && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
+            <form onSubmit={handleUpdateProduct} className="bg-white w-full max-w-2xl rounded-[3.5rem] shadow-2xl p-12 space-y-8 overflow-y-auto max-h-[90vh]">
+              <div className="flex justify-between items-center">
+                <h3 className="text-3xl font-header italic uppercase">Modifier la Référence</h3>
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="p-3 bg-slate-100 rounded-full hover:bg-slate-200"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="col-span-2 space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Désignation de l'article</label>
+                  <input required type="text" value={editProductData.name} onChange={(e) => setEditProductData({...editProductData, name: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Site de stockage</label>
+                  <select required value={editProductData.siteId} onChange={(e) => setEditProductData({...editProductData, siteId: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
+                    {sites.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Catégorie</label>
+                  <select required value={editProductData.category} onChange={(e) => setEditProductData({...editProductData, category: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
+                    {INITIAL_CATEGORIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Unité de mesure</label>
+                  <select required value={editProductData.unit} onChange={(e) => setEditProductData({...editProductData, unit: e.target.value})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none">
+                    {settings.units.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Prix Unitaire</label>
+                  <div className="flex gap-2">
+                    <input type="number" step="any" required value={editProductData.unitPrice} onChange={(e) => setEditProductData({...editProductData, unitPrice: Number(e.target.value)})} className="flex-1 bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
+                    <select value={editProductData.currency} onChange={(e) => setEditProductData({...editProductData, currency: e.target.value as 'Fc' | '$'})} className="bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black outline-none w-20">
+                      <option value="Fc">Fc</option>
+                      <option value="$">$</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Stock Minimum (Alerte)</label>
+                  <input type="number" required value={editProductData.minStock} onChange={(e) => setEditProductData({...editProductData, minStock: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Besoin Mensuel Estimé</label>
+                  <input type="number" required value={editProductData.monthlyNeed} onChange={(e) => setEditProductData({...editProductData, monthlyNeed: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none" />
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-[#1a3a22] text-white py-8 rounded-[2.5rem] font-black text-[13px] uppercase shadow-2xl hover:bg-emerald-900 transition-all">Mettre à jour la Fiche</button>
             </form>
           </div>
         )}
