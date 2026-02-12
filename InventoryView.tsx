@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   Search, Plus, Download, Upload, Edit3, Minus, Printer, Activity, MapPin, Trash2,
-  FileDown, FileUp
+  FileDown, FileUp, FileText, Database, X, ChevronDown
 } from 'lucide-react';
 import { Product, AppSettings, Site } from './types';
 import { Badge } from './Badge';
@@ -16,7 +16,7 @@ interface InventoryViewProps {
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onAdd: () => void;
   onDelete: (id: string) => void;
-  onExport?: () => void; // Nouvelle prop optionnelle
+  onExport?: () => void;
 }
 
 export const InventoryView = ({ 
@@ -34,7 +34,12 @@ export const InventoryView = ({
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterSite, setFilterSite] = useState('All');
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  
+  // État pour le menu déroulant "Ajouter"
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
 
   const exchangeRate = settings.exchangeRate;
 
@@ -60,20 +65,18 @@ export const InventoryView = ({
     window.print();
   };
 
-  // Fonction d'exportation par défaut si aucune n'est fournie
+  // Fonction d'exportation par défaut
   const handleExport = () => {
     if (onExport) {
       onExport();
       return;
     }
     
-    // Export par défaut : génération CSV
     if (products.length === 0) {
       alert("Aucune donnée à exporter");
       return;
     }
     
-    // Création du contenu CSV
     const headers = ["Code", "Désignation", "Catégorie", "Site", "Stock Actuel", "Stock Minimum", "Unité", "Prix Unitaire", "Devise", "Valeur (Fc)"];
     const rows = products.map(p => {
       const siteName = getSiteName(p.siteId);
@@ -105,7 +108,33 @@ export const InventoryView = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    // Fermer le menu après export
+    setIsAddMenuOpen(false);
   };
+
+  // Gestionnaire pour l'import
+  const handleImportClick = () => {
+    importFileInputRef.current?.click();
+    setIsAddMenuOpen(false);
+  };
+
+  // Gestionnaire pour l'ajout manuel
+  const handleManualAdd = () => {
+    onAdd();
+    setIsAddMenuOpen(false);
+  };
+
+  // Fermer le menu si on clique à l'extérieur
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target as Node)) {
+        setIsAddMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="space-y-6 animate-fade-in pb-32">
@@ -158,33 +187,72 @@ export const InventoryView = ({
           </div>
           
           <div className="flex items-center gap-3">
-             {/* BOUTON AJOUTER */}
-             <button 
-               onClick={onAdd} 
-               className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-emerald-700 transition-all shadow-lg"
-             >
-                <Plus className="w-3.5 h-3.5" /> Ajouter
-             </button>
+             {/* BOUTON AJOUTER AVEC MENU DÉROULANT */}
+             <div className="relative" ref={addMenuRef}>
+                <button 
+                  onClick={() => setIsAddMenuOpen(!isAddMenuOpen)}
+                  className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-emerald-700 transition-all shadow-lg"
+                >
+                   <Plus className="w-3.5 h-3.5" /> Ajouter <ChevronDown className="w-3.5 h-3.5 ml-1" />
+                </button>
+                
+                {/* MENU DÉROULANT */}
+                {isAddMenuOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 z-50 animate-fade-in">
+                     <button 
+                       onClick={handleManualAdd}
+                       className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-slate-50 transition-all text-left group"
+                     >
+                        <div className="p-2 bg-emerald-50 rounded-lg group-hover:bg-emerald-100">
+                           <FileText className="w-4 h-4 text-emerald-600" />
+                        </div>
+                        <div>
+                           <p className="text-[11px] font-black uppercase text-slate-900">Ajout manuel</p>
+                           <p className="text-[8px] font-bold text-slate-400">Créer un produit individuellement</p>
+                        </div>
+                     </button>
+                     
+                     <div className="h-px bg-slate-100 my-1"></div>
+                     
+                     <button 
+                       onClick={handleImportClick}
+                       className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-slate-50 transition-all text-left group"
+                     >
+                        <div className="p-2 bg-indigo-50 rounded-lg group-hover:bg-indigo-100">
+                           <Upload className="w-4 h-4 text-indigo-600" />
+                        </div>
+                        <div>
+                           <p className="text-[11px] font-black uppercase text-slate-900">Importer CSV/Excel</p>
+                           <p className="text-[8px] font-bold text-slate-400">Import en masse</p>
+                        </div>
+                     </button>
+                     
+                     <div className="h-px bg-slate-100 my-1"></div>
+                     
+                     <button 
+                       onClick={handleExport}
+                       className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-slate-50 transition-all text-left group"
+                     >
+                        <div className="p-2 bg-emerald-50 rounded-lg group-hover:bg-emerald-100">
+                           <Download className="w-4 h-4 text-emerald-600" />
+                        </div>
+                        <div>
+                           <p className="text-[11px] font-black uppercase text-slate-900">Exporter</p>
+                           <p className="text-[8px] font-bold text-slate-400">Export CSV du catalogue</p>
+                        </div>
+                     </button>
+                  </div>
+                )}
+             </div>
              
-             {/* BOUTON IMPORTER */}
-             <label className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-700 rounded-xl text-[9px] font-black uppercase hover:bg-indigo-100 transition-all shadow-sm cursor-pointer border border-indigo-100">
-                <FileUp className="w-3.5 h-3.5" /> Importer
-                <input 
-                  ref={fileInputRef}
-                  type="file" 
-                  accept=".csv, .xlsx, .xls, text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
-                  onChange={onImport} 
-                  className="hidden" 
-                />
-             </label>
-             
-             {/* BOUTON EXPORTER */}
-             <button 
-               onClick={handleExport}
-               className="flex items-center gap-2 px-6 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-[9px] font-black uppercase hover:bg-emerald-100 transition-all shadow-sm border border-emerald-200"
-             >
-                <FileDown className="w-3.5 h-3.5" /> Exporter
-             </button>
+             {/* INPUT FILE CACHÉ POUR L'IMPORT */}
+             <input 
+               ref={importFileInputRef}
+               type="file" 
+               accept=".csv, .xlsx, .xls, text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" 
+               onChange={onImport} 
+               className="hidden" 
+             />
              
              {/* BOUTON IMPRIMER */}
              <button 
