@@ -280,6 +280,16 @@ export default function App() {
     reader.readAsText(file);
   };
 
+  // ✅ NOUVELLE FONCTION : Export des produits
+  const handleExportProducts = () => {
+    if (products.length === 0) {
+      notify("Aucun produit à exporter", "error");
+      return;
+    }
+    notify(`Export de ${products.length} produits en cours...`, "info");
+    // L'export est géré dans InventoryView, cette fonction est juste un callback
+  };
+
   const handleResetSystem = () => {
     localStorage.clear();
     setProducts([]);
@@ -616,7 +626,22 @@ export default function App() {
 
         <section>
            {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setActiveView} />}
-           {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={(p, t) => setMovementModal({isOpen: true, type: t, product: p})} onEdit={(p) => setEditModal({isOpen: true, product: p})} onImport={handleImportCSV} onAdd={() => setIsAddModalOpen(true)} onDelete={handleDeleteProduct} />}
+           
+           {/* ✅ INVENTORY VIEW AVEC BOUTONS IMPORTER/EXPORTER */}
+           {activeView === 'inventory' && 
+             <InventoryView 
+               products={products} 
+               sites={sites} 
+               settings={settings} 
+               onMovement={(p, t) => setMovementModal({isOpen: true, type: t, product: p})} 
+               onEdit={(p) => setEditModal({isOpen: true, product: p})} 
+               onImport={handleImportCSV} 
+               onAdd={() => setIsAddModalOpen(true)} 
+               onDelete={handleDeleteProduct}
+               onExport={handleExportProducts}
+             />
+           }
+           
            {activeView === 'movements' && <MovementsView products={products} sites={sites} history={history} onTransaction={handleTransaction} />}
            {activeView === 'furniture' && <FurnitureView furniture={furniture} setFurniture={setFurniture} furnitureAudits={furnitureAudits} setFurnitureAudits={setFurnitureAudits} sites={sites} notify={notify} />}
            {activeView === 'sites' && <SitesView sites={sites} setSites={(s) => { setSites(s); notify("Structure réseau mise à jour."); }} products={products} onCopyData={handleCopySiteProducts} onImportCSV={handleImportCSV} />}
