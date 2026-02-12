@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   LayoutDashboard, Box, History as HistoryIcon, Activity, LogOut, 
   Settings, CheckSquare, FileBarChart, ListChecks, Globe, X, RefreshCw,
   BellRing, AlertCircle, MapPin, CheckCircle2, Info, Lamp, ArrowLeftRight,
-  ClipboardList, Search, Truck, Command, AlertTriangle, Database
+  ClipboardList, Search, Truck, Command, AlertTriangle
 } from 'lucide-react';
 import { Product, InventoryLog, ViewType, Task, AppSettings, NeedReport, Site, Furniture, FurnitureAuditSession, Supplier } from './types';
 import { INITIAL_CATEGORIES, INITIAL_FURNITURE, INITIAL_SITES, INITIAL_UNITS, INITIAL_SUPPLIERS } from './constants';
@@ -32,7 +33,7 @@ const getStored = <T,>(key: string, defaultValue: T): T => {
 const DEFAULT_SETTINGS: AppSettings = {
   enterpriseName: 'SmartStock ERP',
   locationId: 'RDC_HQ_01',
-  exchangeRate: 2800,
+  exchangeRate: 2250,
   primaryCurrency: 'Fc',
   defaultSafetyMargin: 20,
   autoBackup: true,
@@ -73,39 +74,28 @@ export default function App() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
   // États de recherche globale
-  const [globalSearch, setGlobalSearch] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
+  const [products, setProducts] = useState<Product[]>(getStored('ss_products', [])); // ← Plus de données par défaut
 
   // État du modal de déconnexion
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [furniture, setFurniture] = useState<Furniture[]>(getStored('ss_furniture', [])); // ← Vide
+  const [sites, setSites] = useState<Site[]>(getStored('ss_sites', [])); // ← Vide
+  const [suppliers, setSuppliers] = useState<Supplier[]>(getStored('ss_suppliers', [])); // ← Vide
 
-  // TOUS LES STATES SONT VIDES PAR DÉFAUT
-  const [products, setProducts] = useState<Product[]>(getStored('ss_products', []));
-  const [furniture, setFurniture] = useState<Furniture[]>(getStored('ss_furniture', []));
+
   const [furnitureAudits, setFurnitureAudits] = useState<FurnitureAuditSession[]>(getStored('ss_furniture_audits', []));
   const [history, setHistory] = useState<InventoryLog[]>(getStored('ss_history', []));
   const [tasks, setTasks] = useState<Task[]>(getStored('ss_tasks', []));
   const [needsHistory, setNeedsHistory] = useState<NeedReport[]>(getStored('ss_needs_history', []));
-  const [sites, setSites] = useState<Site[]>(getStored('ss_sites', []));
-  const [suppliers, setSuppliers] = useState<Supplier[]>(getStored('ss_suppliers', []));
+  const [sites, setSites] = useState<Site[]>(getStored('ss_sites', INITIAL_SITES));
+  const [suppliers, setSuppliers] = useState<Supplier[]>(getStored('ss_suppliers', INITIAL_SUPPLIERS));
   
   const [movementModal, setMovementModal] = useState<{isOpen: boolean, type: 'entry'|'exit', product: Product | null}>({isOpen: false, type: 'entry', product: null});
   const [editModal, setEditModal] = useState<{isOpen: boolean, product: Product | null}>({isOpen: false, product: null});
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const [newProductData, setNewProductData] = useState({
-    name: '', category: 'Alimentaire', unitPrice: 0, currency: 'Fc' as 'Fc' | '$', 
-    minStock: 10, unit: settings.units[0] || 'PIÈCE', initialStock: 0, 
-    siteId: sites.length > 0 ? sites[0].id : ''
-  });
-
-  // Détection du premier lancement (aucune donnée)
-  const [isFirstLaunch, setIsFirstLaunch] = useState(() => {
-    const hasProducts = getStored('ss_products', []).length > 0;
-    const hasSites = getStored('ss_sites', []).length > 0;
-    const hasFurniture = getStored('ss_furniture', []).length > 0;
-    return !hasProducts && !hasSites && !hasFurniture;
+    name: '', category: 'Alimentaire', unitPrice: 0, currency: 'Fc' as 'Fc' | '$', minStock: 10, unit: settings.units[0] || 'PIÈCE', initialStock: 0, siteId: sites[0]?.id || '1'
   });
 
   const notify = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -128,15 +118,8 @@ export default function App() {
     setProducts(updated);
     const newLog: InventoryLog = { 
         id: `LOG-${Date.now()}`.toUpperCase(),
-        date: new Date().toISOString(), 
-        type: type, 
-        productId: prodId, 
-        productName: product.name, 
-        changeAmount: amount, 
-        finalStock, 
-        reason, 
-        responsible: 'ADMIN_PRO', 
-        siteId: product.siteId 
+        date: new Date().toISOString(), type: type, productId: prodId, productName: product.name, 
+        changeAmount: amount, finalStock, reason, responsible: 'ADMIN_PRO', siteId: product.siteId 
     };
     setHistory([newLog, ...history]);
     setMovementModal({isOpen: false, type: 'entry', product: null});
@@ -252,7 +235,7 @@ export default function App() {
             unit: unit || 'PIÈCE',
             unitPrice: priceNum,
             currency: (currency as 'Fc' | '$') || 'Fc',
-            siteId: targetSiteId || (sites.length > 0 ? sites[0].id : ''),
+            siteId: targetSiteId || sites[0]?.id || '1',
             lastInventoryDate: timestamp
           };
           newProducts.push(product);
@@ -266,7 +249,7 @@ export default function App() {
             finalStock: stockNum,
             reason: 'Initialisation via Import',
             responsible: 'IMPORT_SYSTEM',
-            siteId: targetSiteId || (sites.length > 0 ? sites[0].id : '')
+            siteId: targetSiteId || sites[0]?.id || '1'
           });
           addedCount++;
         }
@@ -280,30 +263,19 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  // ✅ NOUVELLE FONCTION : Export des produits
-  const handleExportProducts = () => {
-    if (products.length === 0) {
-      notify("Aucun produit à exporter", "error");
-      return;
-    }
-    notify(`Export de ${products.length} produits en cours...`, "info");
-    // L'export est géré dans InventoryView, cette fonction est juste un callback
-  };
-
   const handleResetSystem = () => {
     localStorage.clear();
     setProducts([]);
-    setFurniture([]);
+    setFurniture(INITIAL_FURNITURE);
     setFurnitureAudits([]);
     setHistory([]);
     setTasks([]);
     setNeedsHistory([]);
-    setSites([]);
-    setSuppliers([]);
+    setSites(INITIAL_SITES);
+    setSuppliers(INITIAL_SUPPLIERS);
     setSettings(DEFAULT_SETTINGS);
     setActiveView('dashboard');
     setIsLoggedIn(false);
-    setIsFirstLaunch(true);
     notify("Système réinitialisé avec succès", "info");
   };
 
@@ -315,23 +287,12 @@ export default function App() {
 
   const handleAddProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    if (sites.length === 0) {
-      notify("Vous devez d'abord créer un site.", "error");
-      return;
-    }
     const id = `SKU-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     const product: Product = {
-      id, 
-      name: newProductData.name, 
-      category: newProductData.category, 
-      currentStock: newProductData.initialStock,
-      minStock: newProductData.minStock, 
-      monthlyNeed: newProductData.minStock * 2,
-      unit: newProductData.unit, 
-      unitPrice: newProductData.unitPrice, 
-      currency: newProductData.currency,
-      siteId: newProductData.siteId || (sites.length > 0 ? sites[0].id : ''), 
-      lastInventoryDate: new Date().toISOString()
+      id, name: newProductData.name, category: newProductData.category, currentStock: newProductData.initialStock,
+      minStock: newProductData.minStock, monthlyNeed: newProductData.minStock * 2,
+      unit: newProductData.unit, unitPrice: newProductData.unitPrice, currency: newProductData.currency,
+      siteId: newProductData.siteId, lastInventoryDate: new Date().toISOString()
     };
     setProducts([product, ...products]);
     if (product.currentStock > 0) {
@@ -339,11 +300,7 @@ export default function App() {
     }
     setIsAddModalOpen(false);
     notify(`Produit "${product.name}" ajouté au catalogue.`);
-    setNewProductData({ 
-      name: '', category: 'Alimentaire', unitPrice: 0, currency: 'Fc', 
-      minStock: 10, unit: settings.units[0] || 'PIÈCE', initialStock: 0, 
-      siteId: sites.length > 0 ? sites[0].id : '' 
-    });
+    setNewProductData({ name: '', category: 'Alimentaire', unitPrice: 0, currency: 'Fc', minStock: 10, unit: settings.units[0] || 'PIÈCE', initialStock: 0, siteId: sites[0]?.id || '1' });
   };
 
   const handleUpdateProduct = (updatedProduct: Product) => {
@@ -419,73 +376,6 @@ export default function App() {
     localStorage.setItem('ss_suppliers', JSON.stringify(suppliers));
     localStorage.setItem('isLoggedIn', JSON.stringify(isLoggedIn));
   }, [products, furniture, furnitureAudits, history, tasks, isLoggedIn, settings, needsHistory, sites, suppliers]);
-
-  // ÉCRAN DE PREMIER LANCEMENT - BASE DE DONNÉES VIERGE
-  if (isFirstLaunch) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#1a3a22] p-6 relative overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-500/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-400/5 rounded-full blur-[120px]" />
-        
-        <div className="bg-white w-full max-w-md rounded-[4rem] p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] animate-fade-in relative z-10 border border-white/20">
-          <div className="text-center mb-12">
-            <div className="w-24 h-24 bg-emerald-100 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-inner">
-              <Database className="w-12 h-12 text-emerald-600" />
-            </div>
-            <h2 className="text-3xl font-black italic uppercase text-[#1a3a22] leading-tight mb-4">
-              SmartStock Pro
-            </h2>
-            <div className="flex items-center justify-center gap-2 mt-3">
-              <div className="h-px w-8 bg-slate-100" />
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">BASE VIERGE</p>
-              <div className="h-px w-8 bg-slate-100" />
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-              <p className="text-[11px] font-bold text-slate-700 uppercase italic leading-relaxed text-center">
-                Aucune donnée n'est chargée. Vous partez d'une base complètement vierge.
-              </p>
-            </div>
-
-            <button
-              onClick={() => {
-                // Créer un premier site par défaut pour démarrer
-                const firstSite: Site = {
-                  id: `SITE-${Date.now()}`,
-                  name: 'Site Principal',
-                  location: 'Siège',
-                  capacity: 1000,
-                  status: 'Opérationnel',
-                  manager: 'Administrateur'
-                };
-                setSites([firstSite]);
-                setNewProductData(prev => ({ ...prev, siteId: firstSite.id }));
-                setIsFirstLaunch(false);
-                setIsLoggedIn(true);
-                notify("Base de données initialisée avec un site par défaut.", "success");
-              }}
-              className="w-full bg-emerald-600 text-white py-7 rounded-[2.5rem] font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl hover:bg-emerald-700 transition-all active:scale-95 flex items-center justify-center gap-3"
-            >
-              <Database className="w-4 h-4" /> Initialiser mon espace
-            </button>
-
-            <div className="mt-8 pt-6 border-t border-slate-50">
-              <p className="text-[9px] text-slate-400 text-center uppercase tracking-widest">
-                Vous pourrez créer vos propres sites, produits,<br />mobilier et fournisseurs.
-              </p>
-              <p className="text-[11px] font-header italic text-slate-400 text-center mt-6">
-                By <span className="text-[#1a3a22]">Bereckya MAYELE</span> logistics
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
-      </div>
-    );
-  }
 
   if (!isLoggedIn) return <LoginView enterpriseName={settings.enterpriseName} onLogin={() => { setIsLoggedIn(true); notify("Bienvenue sur SmartStock Pro"); }} />;
 
@@ -626,22 +516,7 @@ export default function App() {
 
         <section>
            {activeView === 'dashboard' && <DashboardView products={products} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setActiveView} />}
-           
-           {/* ✅ INVENTORY VIEW AVEC BOUTONS IMPORTER/EXPORTER */}
-           {activeView === 'inventory' && 
-             <InventoryView 
-               products={products} 
-               sites={sites} 
-               settings={settings} 
-               onMovement={(p, t) => setMovementModal({isOpen: true, type: t, product: p})} 
-               onEdit={(p) => setEditModal({isOpen: true, product: p})} 
-               onImport={handleImportCSV} 
-               onAdd={() => setIsAddModalOpen(true)} 
-               onDelete={handleDeleteProduct}
-               onExport={handleExportProducts}
-             />
-           }
-           
+           {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={(p, t) => setMovementModal({isOpen: true, type: t, product: p})} onEdit={(p) => setEditModal({isOpen: true, product: p})} onImport={handleImportCSV} onAdd={() => setIsAddModalOpen(true)} onDelete={handleDeleteProduct} />}
            {activeView === 'movements' && <MovementsView products={products} sites={sites} history={history} onTransaction={handleTransaction} />}
            {activeView === 'furniture' && <FurnitureView furniture={furniture} setFurniture={setFurniture} furnitureAudits={furnitureAudits} setFurnitureAudits={setFurnitureAudits} sites={sites} notify={notify} />}
            {activeView === 'sites' && <SitesView sites={sites} setSites={(s) => { setSites(s); notify("Structure réseau mise à jour."); }} products={products} onCopyData={handleCopySiteProducts} onImportCSV={handleImportCSV} />}
@@ -649,16 +524,7 @@ export default function App() {
            {activeView === 'audit_session' && <AuditView products={products} sites={sites} exchangeRate={settings.exchangeRate} onUpdateStock={handleTransaction} notify={notify} />}
            {activeView === 'traceability' && <GlobalHistoryView history={history} needsHistory={needsHistory} furnitureAudits={furnitureAudits} sites={sites} products={products} settings={settings} />}
            {activeView === 'tasks' && <TasksView tasks={tasks} setTasks={(t) => { setTasks(t); }} notify={notify} />}
-           {activeView === 'needs_list' && 
-             <NeedsReportView 
-               products={products} 
-               settings={settings} 
-               needsHistory={needsHistory}
-               onSaveReport={(rep) => { setNeedsHistory([rep, ...needsHistory]); notify(`État de besoin ${rep.id} enregistré.`); }}
-               onDeleteReport={(id) => { setNeedsHistory(needsHistory.filter(r => r.id !== id)); notify("Rapport supprimé des archives.", "error"); }}
-               sites={sites}
-             />
-           }
+           {activeView === 'needs_list' && <NeedsReportView products={products} settings={settings} needsHistory={needsHistory} onSaveReport={(rep) => { setNeedsHistory([rep, ...needsHistory]); notify(`État de besoin ${rep.id} enregistré.`); }} onDeleteReport={(id) => { setNeedsHistory(needsHistory.filter(r => r.id !== id)); notify("Rapport supprimé des archives.", "error"); }} />}
            {activeView === 'analytics' && <AnalyticsView products={products} history={history} exchangeRate={settings.exchangeRate} sites={sites} />}
            {activeView === 'settings' && <SettingsView settings={settings} onUpdateSettings={(s) => { setSettings(s); notify("Paramètres système mis à jour."); }} onResetSystem={handleResetSystem} />}
         </section>
@@ -676,7 +542,8 @@ export default function App() {
               <div className="space-y-3">
                 <h3 className="text-3xl font-header italic uppercase text-slate-900">Déconnexion</h3>
                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                  Êtes-vous sûr de vouloir quitter la plateforme ?
+                  Êtes-vous sûr de vouloir quitter la plateforme ? <br/> 
+                  Toutes les modifications non sauvegardées pourraient être perdues.
                 </p>
               </div>
 
@@ -702,259 +569,6 @@ export default function App() {
           </div>
         )}
       </main>
-
-      {/* MODAL AJOUT PRODUIT */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
-          <form onSubmit={handleAddProduct} className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-12 space-y-8 overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between items-center">
-              <h3 className="text-3xl font-header italic uppercase">Nouveau Produit</h3>
-              <button type="button" onClick={() => setIsAddModalOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X className="w-5 h-5" /></button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-6">
-              <div className="col-span-2 space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Nom du produit</label>
-                <input 
-                  required 
-                  type="text" 
-                  value={newProductData.name} 
-                  onChange={(e) => setNewProductData({...newProductData, name: e.target.value})} 
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Catégorie</label>
-                <select 
-                  value={newProductData.category} 
-                  onChange={(e) => setNewProductData({...newProductData, category: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
-                >
-                  {INITIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Unité</label>
-                <select 
-                  value={newProductData.unit} 
-                  onChange={(e) => setNewProductData({...newProductData, unit: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
-                >
-                  {settings.units.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Site</label>
-                <select 
-                  value={newProductData.siteId} 
-                  onChange={(e) => setNewProductData({...newProductData, siteId: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
-                  disabled={sites.length === 0}
-                >
-                  {sites.length === 0 ? (
-                    <option value="">Aucun site - Créez-en un d'abord</option>
-                  ) : (
-                    sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
-                  )}
-                </select>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Prix unitaire</label>
-                <input 
-                  required 
-                  type="number" 
-                  step="0.01"
-                  value={newProductData.unitPrice} 
-                  onChange={(e) => setNewProductData({...newProductData, unitPrice: Number(e.target.value)})} 
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Devise</label>
-                <select 
-                  value={newProductData.currency} 
-                  onChange={(e) => setNewProductData({...newProductData, currency: e.target.value as 'Fc' | '$'})}
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
-                >
-                  <option value="Fc">FC</option>
-                  <option value="$">USD</option>
-                </select>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Stock initial</label>
-                <input 
-                  type="number" 
-                  value={newProductData.initialStock} 
-                  onChange={(e) => setNewProductData({...newProductData, initialStock: Number(e.target.value)})} 
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Stock minimum</label>
-                <input 
-                  required 
-                  type="number" 
-                  value={newProductData.minStock} 
-                  onChange={(e) => setNewProductData({...newProductData, minStock: Number(e.target.value)})} 
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                />
-              </div>
-            </div>
-
-            <button 
-              type="submit" 
-              disabled={sites.length === 0}
-              className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-black text-[12px] uppercase shadow-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-3 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <Save className="w-5 h-5" /> Enregistrer le produit
-            </button>
-            
-            {sites.length === 0 && (
-              <p className="text-[9px] font-black text-rose-500 text-center">
-                ⚠️ Vous devez d'abord créer un site dans "Gestion Sites"
-              </p>
-            )}
-          </form>
-        </div>
-      )}
-
-      {/* MODAL MOUVEMENT */}
-      {movementModal.isOpen && movementModal.product && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
-          <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl p-12 space-y-8">
-            <div className="flex justify-between items-center">
-              <h3 className="text-2xl font-header italic uppercase">
-                {movementModal.type === 'entry' ? 'Entrée de stock' : 'Sortie de stock'}
-              </h3>
-              <button type="button" onClick={() => setMovementModal({isOpen: false, type: 'entry', product: null})} className="p-2 bg-slate-100 rounded-full"><X className="w-4 h-4" /></button>
-            </div>
-            
-            <div className="space-y-6">
-              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Produit</p>
-                <p className="text-xl font-header italic text-slate-900">{movementModal.product.name}</p>
-                <p className="text-[9px] font-bold text-slate-400 mt-1">Stock actuel : {movementModal.product.currentStock} {movementModal.product.unit}</p>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Quantité</label>
-                <input 
-                  id="movementQty"
-                  type="number" 
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-3xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                  placeholder="0"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Motif / Référence</label>
-                <input 
-                  id="movementReason"
-                  type="text" 
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-bold italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                  placeholder={movementModal.type === 'entry' ? "Facture, BL, Retour..." : "Consommation, Livraison..."}
-                />
-              </div>
-              
-              <button 
-                onClick={() => {
-                  const qty = (document.getElementById('movementQty') as HTMLInputElement)?.value;
-                  const reason = (document.getElementById('movementReason') as HTMLInputElement)?.value;
-                  if (!qty || Number(qty) <= 0) {
-                    notify("Veuillez saisir une quantité valide", "error");
-                    return;
-                  }
-                  const amount = movementModal.type === 'entry' ? Number(qty) : -Number(qty);
-                  handleTransaction(movementModal.product!.id, amount, reason || (movementModal.type === 'entry' ? 'Entrée manuelle' : 'Sortie manuelle'), movementModal.type);
-                }}
-                className={`w-full py-6 rounded-3xl font-black text-[11px] uppercase tracking-widest shadow-xl transition-all ${
-                  movementModal.type === 'entry' 
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
-                    : 'bg-rose-600 hover:bg-rose-700 text-white'
-                }`}
-              >
-                Confirmer la {movementModal.type === 'entry' ? 'réception' : 'sortie'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL ÉDITION PRODUIT */}
-      {editModal.isOpen && editModal.product && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
-          <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-12 space-y-8">
-            <div className="flex justify-between items-center">
-              <h3 className="text-3xl font-header italic uppercase">Modifier Produit</h3>
-              <button type="button" onClick={() => setEditModal({isOpen: false, product: null})} className="p-2 bg-slate-100 rounded-full"><X className="w-4 h-4" /></button>
-            </div>
-            
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Nom du produit</label>
-                <input 
-                  id="editName"
-                  type="text" 
-                  className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                  defaultValue={editModal.product.name}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Stock minimum</label>
-                  <input 
-                    id="editMinStock"
-                    type="number" 
-                    className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                    defaultValue={editModal.product.minStock}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Prix unitaire</label>
-                  <input 
-                    id="editPrice"
-                    type="number" 
-                    step="0.01"
-                    className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                    defaultValue={editModal.product.unitPrice}
-                  />
-                </div>
-              </div>
-              
-              <button 
-                onClick={() => {
-                  const name = (document.getElementById('editName') as HTMLInputElement)?.value;
-                  const minStock = Number((document.getElementById('editMinStock') as HTMLInputElement)?.value);
-                  const price = Number((document.getElementById('editPrice') as HTMLInputElement)?.value);
-                  
-                  if (!name || !minStock || !price) {
-                    notify("Veuillez remplir tous les champs", "error");
-                    return;
-                  }
-                  
-                  handleUpdateProduct({
-                    ...editModal.product!,
-                    name,
-                    minStock,
-                    unitPrice: price
-                  });
-                }}
-                className="w-full bg-emerald-600 text-white py-6 rounded-3xl font-black text-[12px] uppercase shadow-xl hover:bg-emerald-700 transition-all"
-              >
-                Mettre à jour
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
