@@ -3,7 +3,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { 
   Search, Plus, Download, Upload, Edit3, Printer, Activity, MapPin, 
   Trash2, FileDown, FileUp, FileText, Database, X, ChevronDown, 
-  CheckCircle2, AlertCircle, Info, FileSpreadsheet, History
+  CheckCircle2, AlertCircle, Info, FileSpreadsheet, History, Minus
 } from 'lucide-react';
 import { Product, AppSettings, Site } from './types';
 import { Badge } from './Badge';
@@ -12,7 +12,8 @@ interface InventoryViewProps {
   products: Product[];
   settings: AppSettings;
   sites: Site[];
-  onMovement: (p: Product, type: 'entry' | 'exit') => void;
+  onMovement: (p: Product, val: number) => void;
+  onQuickInventory: (prodId: string) => void;
   onEdit: (p: Product) => void;
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onAdd: () => void;
@@ -24,6 +25,7 @@ export const InventoryView = ({
   settings, 
   sites, 
   onMovement, 
+  onQuickInventory,
   onEdit, 
   onImport, 
   onAdd, 
@@ -37,7 +39,6 @@ export const InventoryView = ({
 
   const handleExportCSV = () => {
     if (products.length === 0) return alert("Aucune donnée à exporter.");
-    // Alignement CSV sur le nouvel ordre demandé
     const headers = ["N°", "ID", "Produit", "Catégorie", "Quantité", "Prix Unitaire (Fc)", "Prix Total (Fc)", "Site", "Statut"];
     const rows = products.map((p, idx) => {
       const siteName = sites.find(s => s.id === p.siteId)?.name || 'N/A';
@@ -119,7 +120,7 @@ export const InventoryView = ({
             <Plus className="w-4 h-4" /> Ajouter
           </button>
         </div>
-        <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={onImport} />
+        <input ref={fileInputRef} type="file" accept=".csv, .xlsx, .xls" className="hidden" onChange={onImport} />
       </div>
 
       {/* TABLEAU RÉALIGNÉ : N°, ID, Produit, Catégorie, Quantité, Prix Unitaire, Prix Total, Site */}
@@ -131,7 +132,7 @@ export const InventoryView = ({
               <th className="px-6 py-8">ID / Réf</th>
               <th className="px-8 py-8">Produit</th>
               <th className="px-6 py-8 text-center">Catégorie</th>
-              <th className="px-6 py-8 text-center">Quantité</th>
+              <th className="px-6 py-8 text-center">Quantité & Audit</th>
               {!settings.maskSensitiveData && <th className="px-6 py-8 text-right">Prix Unitaire</th>}
               {!settings.maskSensitiveData && <th className="px-6 py-8 text-right">Prix Total</th>}
               <th className="px-6 py-8">Site / Emplacement</th>
@@ -166,8 +167,23 @@ export const InventoryView = ({
                     </td>
 
                     <td className="px-6 py-7 text-center">
-                       <div className="flex flex-col items-center">
-                          <span className={`text-xl font-header italic ${isLow ? 'text-rose-500' : 'text-[#1a3a22]'}`}>{p.currentStock}</span>
+                       <div className="flex flex-col items-center gap-2">
+                          <div className="flex items-center gap-3 no-print">
+                             <button onClick={() => onMovement(p, -1)} className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-rose-100 hover:text-rose-500 transition-all"><Minus className="w-3.5 h-3.5" /></button>
+                             <span className={`text-xl font-header italic ${isLow ? 'text-rose-500' : 'text-[#1a3a22]'}`}>{p.currentStock}</span>
+                             <button onClick={() => onMovement(p, 1)} className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-emerald-100 hover:text-emerald-500 transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                             
+                             <div className="h-4 w-px bg-slate-100 mx-1" />
+                             
+                             <button 
+                               onClick={() => onQuickInventory(p.id)} 
+                               title={`Inventaire Rapide (Cible: ${p.targetStock})`}
+                               className="p-1.5 bg-indigo-50 text-indigo-400 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                             >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                             </button>
+                          </div>
+                          <span className="print:block hidden text-xl font-header italic text-[#1a3a22]">{p.currentStock}</span>
                           <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">{p.unit}</span>
                        </div>
                     </td>
@@ -192,7 +208,6 @@ export const InventoryView = ({
 
                     <td className="px-6 py-7 text-right no-print">
                       <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
-                        <button onClick={() => onMovement(p, 'entry')} title="Mouvement Stock" className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><History className="w-3.5 h-3.5" /></button>
                         <button onClick={() => onEdit(p)} title="Modifier" className="p-2 bg-slate-50 text-slate-600 rounded-lg hover:bg-[#1a3a22] hover:text-white transition-all shadow-sm"><Edit3 className="w-3.5 h-3.5" /></button>
                         <button onClick={() => onDelete(p.id)} title="Supprimer" className="p-2 bg-rose-50 text-rose-300 rounded-lg hover:bg-rose-500 hover:text-white transition-all shadow-sm"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
@@ -208,7 +223,7 @@ export const InventoryView = ({
       <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 flex items-center gap-4 no-print opacity-60">
         <Info className="w-5 h-5 text-slate-400" />
         <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-loose">
-          <b>Logic Controller :</b> L'alignement des colonnes est optimisé pour une lecture rapide des indicateurs de performance (KPI) et de la valorisation monétaire.
+          <b>Smart Inventory :</b> Utilisez l'icône <CheckCircle2 className="inline w-3 h-3" /> pour synchroniser instantanément le stock avec votre niveau cible prédéfini. Un log <i>"Inventaire rapide"</i> sera archivé.
         </p>
       </div>
     </div>

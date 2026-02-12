@@ -48,6 +48,7 @@ export interface Product {
   category: string;
   currentStock: number;
   minStock: number;
+  targetStock: number; // Ajout du stock cible
   monthlyNeed: number;
   unit: string;
   unitPrice: number;
@@ -93,7 +94,7 @@ export interface FurnitureAuditSession {
 export interface InventoryLog {
   id: string;
   date: string;
-  type: 'entry' | 'exit' | 'transfer' | 'adjustment';
+  type: 'entry' | 'exit' | 'transfer' | 'adjustment' | 'manual_update'; // Ajout de manual_update
   productId: string;
   productName: string;
   changeAmount: number;
