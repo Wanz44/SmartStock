@@ -190,6 +190,12 @@ export default function App() {
     }
   };
 
+  const handleLogout = () => {
+    if (confirm("Êtes-vous sûr de vouloir vous déconnecter ?")) {
+      setIsLoggedIn(false);
+    }
+  };
+
   const runAutomatedAnalysis = async () => {
     setIsAnalyzing(true);
     try {
@@ -309,45 +315,81 @@ export default function App() {
     if (e.target) e.target.value = '';
   };
 
-  const handleImportFurniture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportFurniture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split('\n').filter(l => l.trim() !== '');
-      if (lines.length <= 1) return notify("Fichier vide", "error");
-      
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer);
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      if (jsonData.length <= 1) return notify("Fichier vide ou invalide", "error");
+
       const newFurniture = [...furniture];
       const newSites = [...sites];
       let importCount = 0;
 
-      lines.slice(1).forEach(line => {
-        const parts = line.split(/[;,]/).map(p => p.trim());
-        if (parts.length >= 2) {
-          const code = parts[0] || `MOB-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-          const name = parts[1].toUpperCase();
-          const siteNameInput = parts[2] || 'MAGASIN CENTRAL';
-          const qty = parseInt(parts[3]) || 1;
-          const condition = (parts[4] as any) || 'Bon';
+      // Structure attendue : 0:Service, 1:Article, 2:Réf, 3:Quantité, 4:État, 5:Observation
+      jsonData.slice(1).forEach((row: any) => {
+        if (Array.isArray(row) && row.length >= 1) {
+          const siteNameInput = (row[0] || 'NON CLASSÉ').toString().trim().toUpperCase();
+          const name = (row[1] || '').toString().trim().toUpperCase();
+          if (!name) return;
 
-          let siteObj = newSites.find(s => s.name.toUpperCase() === siteNameInput.toUpperCase());
+          const code = (row[2] || `MOB-${Math.random().toString(36).substr(2, 6).toUpperCase()}`).toString().trim();
+          const qty = parseInt(row[3]) || 1;
+          
+          let conditionInput = (row[4] || 'Bon').toString().trim();
+          // Normalisation de l'état
+          let condition: any = 'Bon';
+          if (/neuf/i.test(conditionInput)) condition = 'Neuf';
+          else if (/use|usé/i.test(conditionInput)) condition = 'Usé';
+          else if (/dommage|hs|mort/i.test(conditionInput)) condition = 'Endommagé';
+
+          const observation = row[5] || '';
+
+          // Gestion automatique du Site
+          let siteObj = newSites.find(s => s.name.toUpperCase() === siteNameInput);
           if (!siteObj) {
-            siteObj = { id: `S-${Date.now()}-${Math.random().toString(36).substr(2,3)}`.toUpperCase(), name: siteNameInput, location: 'Auto-généré', capacity: 1000, status: 'Opérationnel', manager: 'Admin' };
+            siteObj = { 
+              id: `S-${Date.now()}-${Math.random().toString(36).substr(2,3)}`.toUpperCase(), 
+              name: siteNameInput, 
+              location: 'Auto-généré', 
+              capacity: 1000, 
+              status: 'Opérationnel', 
+              manager: 'Admin Logistique' 
+            };
             newSites.push(siteObj);
           }
 
+          // Éviter les doublons par code
           if (!newFurniture.find(f => f.code === code)) {
-            newFurniture.push({ id: `F-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`.toUpperCase(), code, name, siteId: siteObj.id, currentCount: qty, condition, lastChecked: new Date().toISOString() });
+            newFurniture.push({
+              id: `F-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`.toUpperCase(),
+              code,
+              name,
+              siteId: siteObj.id,
+              currentCount: qty,
+              condition,
+              lastChecked: new Date().toISOString(),
+              comment: observation
+            });
             importCount++;
           }
         }
       });
+
       setSites(newSites);
       setFurniture(newFurniture);
-      notify(`${importCount} mobiliers importés.`);
-    };
-    reader.readAsText(file);
+      notify(`${importCount} mobiliers classés et importés depuis ${file.name}.`);
+    } catch (err) {
+      console.error(err);
+      notify("Erreur lors de l'importation du registre mobilier", "error");
+    }
+
     if (e.target) e.target.value = '';
   };
 
@@ -468,7 +510,7 @@ export default function App() {
           <NavItem active={activeView === 'trash'} onClick={() => setActiveView('trash')} icon={Trash2} label="Corbeille" alertCount={deletedProducts.length + deletedFurniture.length} />
           <NavItem active={activeView === 'settings'} onClick={() => setActiveView('settings')} icon={Settings} label="Paramètres" />
         </nav>
-        <button onClick={() => setIsLoggedIn(false)} className="mt-8 flex items-center gap-4 px-6 py-4 rounded-2xl bg-white/5 text-slate-400 font-bold text-[10px] uppercase hover:bg-rose-600 hover:text-white transition-all">
+        <button onClick={handleLogout} className="mt-8 flex items-center gap-4 px-6 py-4 rounded-2xl bg-white/5 text-slate-400 font-bold text-[10px] uppercase hover:bg-rose-600 hover:text-white transition-all">
           <LogOut className="w-4 h-4" /> Déconnexion
         </button>
       </aside>
@@ -626,7 +668,8 @@ export default function App() {
                        )}
 
                        {/* NO RESULTS AT ALL */}
-                       {Object.values(globalSearchResults).every(arr => arr.length === 0) && (
+                       {/* DO add comment above each fix. Fix type error by casting array items to any */}
+                       {Object.values(globalSearchResults).every((arr: any) => arr.length === 0) && (
                          <div className="py-20 text-center text-slate-400 italic">
                             <p className="text-[14px] font-header uppercase">Aucun résultat trouvé pour "{globalSearchQuery}"</p>
                             <p className="text-[9px] font-bold mt-2 uppercase tracking-widest">Vérifiez l'orthographe ou essayez un mot-clé plus court.</p>

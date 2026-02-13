@@ -151,15 +151,16 @@ export const FurnitureView = ({
                <input 
                  ref={furnitureImportRef}
                  type="file" 
-                 accept=".csv" 
+                 accept=".csv, .xlsx, .xls" 
                  className="hidden" 
                  onChange={onImportFurniture} 
                />
                <button 
                  onClick={() => furnitureImportRef.current?.click()}
-                 className="flex items-center gap-3 px-8 py-5 bg-white border border-slate-200 text-slate-600 rounded-3xl font-black text-[11px] uppercase hover:bg-slate-50 transition-all"
+                 className="flex items-center gap-3 px-8 py-5 bg-white border border-slate-200 text-slate-600 rounded-3xl font-black text-[11px] uppercase hover:bg-slate-50 transition-all shadow-sm"
+                 title="Importer depuis CSV ou Excel"
                >
-                 <FileUp className="w-4 h-4" /> Importer
+                 <FileUp className="w-4 h-4 text-emerald-600" /> Importer Registre
                </button>
                <button onClick={handleOpenAdd} className="flex items-center gap-3 px-8 py-5 bg-[#1a3a22] text-white rounded-3xl font-black text-[11px] uppercase shadow-xl hover:bg-emerald-900 transition-all">
                   <Plus className="w-4 h-4" /> Nouvel Article
@@ -184,7 +185,7 @@ export const FurnitureView = ({
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between">
                <div>
                   <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Dégradés / Endommagés</p>
-                  <h4 className="text-3xl font-black italic tracking-tighter text-rose-500">{furnitureStats.damaged}</h4>
+                  <h4 className="text-3xl font-black italic tracking-tighter text-rose-50">{furnitureStats.damaged}</h4>
                </div>
                <div className="p-4 bg-rose-50 rounded-2xl text-rose-500">
                   <TrendingDown className="w-6 h-6" />
@@ -357,6 +358,15 @@ export const FurnitureView = ({
           </form>
         </div>
       )}
+
+      {/* FOOTER INFO IMPORT */}
+      <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 flex items-center gap-4 no-print opacity-60">
+        <Info className="w-5 h-5 text-emerald-500" />
+        <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-loose">
+          <b>Classification Intelligente :</b> L'importation (CSV/Excel) classe automatiquement vos articles par Service. 
+          <br />Structure attendue : <span className="text-slate-600">Service | Article | Code | Quantité | État | Observation</span>.
+        </div>
+      </div>
     </div>
   );
 };
