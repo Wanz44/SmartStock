@@ -4,7 +4,7 @@ import {
   Lamp, Plus, Search, Edit3, Trash2, MapPin, 
   Calendar, Printer, Activity, Filter, CheckCircle2, X, Save,
   Download, Upload, FileSpreadsheet, ArrowRightLeft, Info,
-  History, ClipboardList, TrendingDown, TrendingUp, ChevronRight, FileUp, MessageSquare
+  History, ClipboardList, TrendingDown, TrendingUp, ChevronRight, FileUp, MessageSquare, FileDown
 } from 'lucide-react';
 import { Furniture, Site, FurnitureAuditSession, FurnitureAuditItem } from './types';
 import { Badge } from './Badge';
@@ -123,6 +123,30 @@ export const FurnitureView = ({
     setIsModalOpen(false);
   };
 
+  const handleExportFurniture = () => {
+    if (filteredAndSortedFurniture.length === 0) return notify("Aucune donnée à exporter.", "warning");
+    
+    const headers = ["Service", "Article", "Code", "Quantité", "État", "Observation"];
+    const rows = filteredAndSortedFurniture.map(f => [
+      getSiteName(f.siteId),
+      f.name,
+      f.code,
+      f.currentCount,
+      f.condition,
+      (f.comment || "").replace(/;/g, ",") // Éviter de casser le CSV
+    ]);
+
+    const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(";")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `EXPORT_MOBILIER_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    notify("Registre mobilier exporté en CSV.");
+  };
+
   return (
     <div className="space-y-8 animate-fade-in pb-32">
       <div className="flex flex-wrap items-center justify-between gap-6 no-print">
@@ -160,8 +184,17 @@ export const FurnitureView = ({
                  className="flex items-center gap-3 px-8 py-5 bg-white border border-slate-200 text-slate-600 rounded-3xl font-black text-[11px] uppercase hover:bg-slate-50 transition-all shadow-sm"
                  title="Importer depuis CSV ou Excel"
                >
-                 <FileUp className="w-4 h-4 text-emerald-600" /> Importer Registre
+                 <FileUp className="w-4 h-4 text-emerald-600" /> Importer
                </button>
+               
+               <button 
+                 onClick={handleExportFurniture}
+                 className="flex items-center gap-3 px-8 py-5 bg-white border border-slate-200 text-slate-600 rounded-3xl font-black text-[11px] uppercase hover:bg-slate-50 transition-all shadow-sm"
+                 title="Exporter le registre en CSV"
+               >
+                 <FileDown className="w-4 h-4 text-blue-600" /> Exporter
+               </button>
+
                <button onClick={handleOpenAdd} className="flex items-center gap-3 px-8 py-5 bg-[#1a3a22] text-white rounded-3xl font-black text-[11px] uppercase shadow-xl hover:bg-emerald-900 transition-all">
                   <Plus className="w-4 h-4" /> Nouvel Article
                </button>
@@ -302,7 +335,7 @@ export const FurnitureView = ({
                  </div>
                  <h3 className="text-3xl font-header italic uppercase">{editingItem ? 'Mise à jour Article' : 'Nouvel Article'}</h3>
               </div>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-50 rounded-full hover:bg-slate-100 transition-all"><X className="w-6 h-6 text-slate-400" /></button>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"><X className="w-6 h-6 text-slate-400" /></button>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
