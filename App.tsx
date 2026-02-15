@@ -4,7 +4,8 @@ import {
   LayoutDashboard, Package, Lamp, MapPin, 
   Truck, History, CheckSquare, ListChecks, 
   Settings, LogOut, Trash2, Activity,
-  Bell, Menu, X, Search, AlertTriangle, ChevronRight, Terminal
+  Bell, Menu, X, Search, AlertTriangle, ChevronRight, Terminal,
+  Building2, UserCheck, Star, Box, ExternalLink
 } from 'lucide-react';
 
 import { DashboardView } from './DashboardView';
@@ -203,83 +204,163 @@ const App: React.FC = () => {
   // --- INTERNAL SEARCH VIEW ---
   const GlobalSearchView = () => {
     const [query, setQuery] = useState('');
+    
     const results = useMemo(() => {
-      if (!query || query.length < 2) return { products: [], furniture: [] };
+      if (!query || query.length < 2) return { products: [], furniture: [], sites: [], suppliers: [] };
       const q = query.toLowerCase();
+      
       return {
         products: products.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)),
-        furniture: furniture.filter(f => f.name.toLowerCase().includes(q) || f.code.toLowerCase().includes(q))
+        furniture: furniture.filter(f => f.name.toLowerCase().includes(q) || f.code.toLowerCase().includes(q)),
+        sites: sites.filter(s => s.name.toLowerCase().includes(q) || s.location.toLowerCase().includes(q) || s.manager.toLowerCase().includes(q)),
+        suppliers: suppliers.filter(sup => sup.name.toLowerCase().includes(q) || sup.category.toLowerCase().includes(q) || sup.email.toLowerCase().includes(q))
       };
     }, [query]);
 
+    const totalResults = results.products.length + results.furniture.length + results.sites.length + results.suppliers.length;
+
     return (
       <div className="space-y-10 animate-fade-in pb-32">
-        <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-sm">
-          <div className="relative">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-8 h-8 text-slate-300" />
-            <input 
-              autoFocus
-              type="text" 
-              placeholder="RECHERCHER DANS TOUTE LA BASE : ARTICLES, CODES, PATRIMOINE..." 
-              className="w-full bg-slate-50 border border-slate-100 pl-16 pr-6 py-8 rounded-[2.5rem] text-2xl font-header italic outline-none focus:ring-4 focus:ring-[#1a3a22]/10 transition-all"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          <div className="space-y-6">
-            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] px-6 flex items-center gap-3">
-              <Package className="w-4 h-4" /> Consommables ({results.products.length})
-            </h4>
-            <div className="space-y-4">
-              {results.products.length === 0 ? (
-                <div className="p-10 text-center opacity-20 border-2 border-dashed border-slate-200 rounded-[3rem] text-[10px] font-black uppercase italic">Aucun article correspondant</div>
-              ) : (
-                results.products.map(p => (
-                  <div key={p.id} onClick={() => setView('inventory')} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between group hover:border-[#1a3a22] transition-all cursor-pointer">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-[#1a3a22] group-hover:text-white transition-all"><Package className="w-5 h-5" /></div>
-                      <div>
-                        <p className="text-[13px] font-black uppercase italic text-slate-900 leading-none">{p.name}</p>
-                        <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">ID: {p.id} • {sites.find(s => s.id === p.siteId)?.name}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                       <p className="text-xl font-header italic text-[#1a3a22] leading-none">{p.currentStock}</p>
-                       <Badge variant={p.currentStock <= p.minStock ? 'danger' : 'success'}>{p.unit}</Badge>
-                    </div>
-                  </div>
-                ))
-              )}
+        {/* BARRE DE RECHERCHE PRINCIPALE */}
+        <div className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-6 mb-8">
+               <div className="p-4 bg-emerald-50 rounded-3xl text-emerald-600">
+                  <Search className="w-8 h-8" />
+               </div>
+               <div>
+                  <h3 className="text-3xl font-header italic uppercase leading-none">Centre de Commande Global</h3>
+                  <p className="text-[10px] font-black uppercase text-slate-400 mt-2 tracking-[0.3em]">Scanner les Entrepôts, Inventaires et Partenaires</p>
+               </div>
             </div>
-          </div>
-
-          <div className="space-y-6">
-            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] px-6 flex items-center gap-3">
-              <Lamp className="w-4 h-4" /> Patrimoine Mobilier ({results.furniture.length})
-            </h4>
-            <div className="space-y-4">
-              {results.furniture.length === 0 ? (
-                <div className="p-10 text-center opacity-20 border-2 border-dashed border-slate-200 rounded-[3rem] text-[10px] font-black uppercase italic">Aucun mobilier correspondant</div>
-              ) : (
-                results.furniture.map(f => (
-                  <div key={f.id} onClick={() => setView('furniture')} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between group hover:border-[#1a3a22] transition-all cursor-pointer">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-[#1a3a22] group-hover:text-white transition-all"><Lamp className="w-5 h-5" /></div>
-                      <div>
-                        <p className="text-[13px] font-black uppercase italic text-slate-900 leading-none">{f.name}</p>
-                        <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Ref: {f.code} • {sites.find(s => s.id === f.siteId)?.name}</p>
-                      </div>
-                    </div>
-                    <Badge variant={f.condition === 'Neuf' ? 'success' : f.condition === 'Usé' ? 'warning' : 'info'}>{f.condition}</Badge>
-                  </div>
-                ))
+            <div className="relative">
+              <input 
+                autoFocus
+                type="text" 
+                placeholder="Tapez pour filtrer les SKU, codes actifs, localisations ou fournisseurs..." 
+                className="w-full bg-slate-50 border border-slate-100 pl-8 pr-6 py-8 rounded-[2.5rem] text-2xl font-header italic outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-inner"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              {query && (
+                <button onClick={() => setQuery('')} className="absolute right-8 top-1/2 -translate-y-1/2 p-2 bg-slate-200 text-slate-500 rounded-full hover:bg-slate-300">
+                  <X className="w-5 h-5" />
+                </button>
               )}
             </div>
           </div>
         </div>
+
+        {query.length < 2 ? (
+          <div className="flex flex-col items-center justify-center py-40 opacity-20">
+             <Activity className="w-24 h-24 mb-6" />
+             <p className="text-xl font-header italic uppercase tracking-widest">En attente de saisie algorithmique</p>
+             <p className="text-[10px] font-black uppercase mt-2">Le système scannera toutes les entités dès 2 caractères</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            
+            {/* RÉSULTATS : CONSOMMABLES */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-6">
+                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                   <Box className="w-4 h-4 text-emerald-500" /> Stock ({results.products.length})
+                 </h4>
+              </div>
+              <div className="space-y-3">
+                {results.products.map(p => (
+                  <div key={p.id} onClick={() => setView('inventory')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:border-emerald-500 hover:scale-[1.02] transition-all cursor-pointer group">
+                    <p className="text-[12px] font-black uppercase italic text-slate-900 truncate leading-none mb-2">{p.name}</p>
+                    <div className="flex justify-between items-end">
+                       <div>
+                          <p className="text-[8px] font-bold text-slate-300 uppercase truncate max-w-[120px]">{sites.find(s => s.id === p.siteId)?.name}</p>
+                          <Badge variant={p.currentStock <= p.minStock ? 'danger' : 'success'}>{p.currentStock} {p.unit}</Badge>
+                       </div>
+                       <ExternalLink className="w-3 h-3 text-slate-200 group-hover:text-emerald-500" />
+                    </div>
+                  </div>
+                ))}
+                {results.products.length === 0 && <p className="px-6 text-[9px] font-black text-slate-200 uppercase italic">Aucun article</p>}
+              </div>
+            </div>
+
+            {/* RÉSULTATS : PATRIMOINE */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-6">
+                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                   <Lamp className="w-4 h-4 text-blue-500" /> Patrimoine ({results.furniture.length})
+                 </h4>
+              </div>
+              <div className="space-y-3">
+                {results.furniture.map(f => (
+                  <div key={f.id} onClick={() => setView('furniture')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:border-blue-500 hover:scale-[1.02] transition-all cursor-pointer group">
+                    <p className="text-[12px] font-black uppercase italic text-slate-900 truncate leading-none mb-2">{f.name}</p>
+                    <div className="flex justify-between items-end">
+                       <div>
+                          <p className="text-[8px] font-bold text-slate-300 uppercase mb-1">REF: {f.code}</p>
+                          <Badge variant="info">{f.condition}</Badge>
+                       </div>
+                       <ExternalLink className="w-3 h-3 text-slate-200 group-hover:text-blue-500" />
+                    </div>
+                  </div>
+                ))}
+                {results.furniture.length === 0 && <p className="px-6 text-[9px] font-black text-slate-200 uppercase italic">Aucun mobilier</p>}
+              </div>
+            </div>
+
+            {/* RÉSULTATS : SITES */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-6">
+                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                   <Building2 className="w-4 h-4 text-amber-500" /> Entrepôts ({results.sites.length})
+                 </h4>
+              </div>
+              <div className="space-y-3">
+                {results.sites.map(s => (
+                  <div key={s.id} onClick={() => setView('sites')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:border-amber-500 hover:scale-[1.02] transition-all cursor-pointer group">
+                    <p className="text-[12px] font-black uppercase italic text-slate-900 truncate leading-none mb-2">{s.name}</p>
+                    <div className="flex justify-between items-end">
+                       <div>
+                          <p className="text-[8px] font-bold text-slate-300 uppercase truncate mb-1">{s.location}</p>
+                          <Badge variant="warning">{s.status}</Badge>
+                       </div>
+                       <ExternalLink className="w-3 h-3 text-slate-200 group-hover:text-amber-500" />
+                    </div>
+                  </div>
+                ))}
+                {results.sites.length === 0 && <p className="px-6 text-[9px] font-black text-slate-200 uppercase italic">Aucune localisation</p>}
+              </div>
+            </div>
+
+            {/* RÉSULTATS : FOURNISSEURS */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-6">
+                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                   <Truck className="w-4 h-4 text-indigo-500" /> Partenaires ({results.suppliers.length})
+                 </h4>
+              </div>
+              <div className="space-y-3">
+                {results.suppliers.map(sup => (
+                  <div key={sup.id} onClick={() => setView('suppliers')} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:border-indigo-500 hover:scale-[1.02] transition-all cursor-pointer group">
+                    <p className="text-[12px] font-black uppercase italic text-slate-900 truncate leading-none mb-2">{sup.name}</p>
+                    <div className="flex justify-between items-end">
+                       <div>
+                          <p className="text-[8px] font-bold text-slate-300 uppercase truncate mb-1">{sup.category}</p>
+                          <div className="flex items-center gap-1 text-amber-500">
+                             <span className="text-[10px] font-black">{sup.rating}</span>
+                             <Star className="w-2.5 h-2.5 fill-current" />
+                          </div>
+                       </div>
+                       <ExternalLink className="w-3 h-3 text-slate-200 group-hover:text-indigo-500" />
+                    </div>
+                  </div>
+                ))}
+                {results.suppliers.length === 0 && <p className="px-6 text-[9px] font-black text-slate-200 uppercase italic">Aucun partenaire</p>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
