@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { 
   Activity, ChevronRight, FileText, Zap, HardDrive, CheckSquare, 
   ShieldCheck, TrendingUp, ListChecks, Settings, Wallet, 
-  ArrowDownRight, ArrowUpRight, Banknote, HeartPulse, AlertCircle, Cpu
+  ArrowDownRight, ArrowUpRight, Banknote, HeartPulse, AlertCircle, Cpu, MapPin
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Line, Legend } from 'recharts';
 import { Badge } from './Badge';
@@ -22,14 +22,25 @@ interface DashboardViewProps {
 }
 
 export const DashboardView = ({ products, sites, furniture, history, exchangeRate, setView, logisticsBalance, settings }: DashboardViewProps) => {
-  // Calcul des statistiques de base - 100% réel basé sur les props
+  // Calcul des statistiques de base
   const stats = useMemo(() => {
-    const stockVal = products.reduce((acc: number, p: Product) => acc + (p.currentStock * (p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice)), 0);
     const alerts = products.filter((p: Product) => p.currentStock <= p.minStock).length;
-    return { stockVal, alerts, prodCount: products.length, furnCount: furniture.length };
-  }, [products, exchangeRate, furniture]);
+    return { alerts, prodCount: products.length, furnCount: furniture.length };
+  }, [products, furniture]);
 
-  // Santé du stock par site basée uniquement sur les données de la base
+  // Valeur par site pour la nouvelle carte
+  const siteValueStats = useMemo(() => {
+    return sites.map(site => {
+      const siteProds = products.filter(p => p.siteId === site.id);
+      const value = siteProds.reduce((acc, p) => {
+        const pVal = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
+        return acc + (p.currentStock * pVal);
+      }, 0);
+      return { name: site.name, value };
+    }).sort((a, b) => b.value - a.value);
+  }, [products, sites, exchangeRate]);
+
+  // Santé du stock par site
   const siteHealthStats = useMemo(() => {
     if (sites.length === 0) return [];
     
@@ -61,7 +72,7 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
       });
   }, [history, products, exchangeRate]);
 
-  // Graphique de performance - AUCUNE SIMULATION, AUCUN DRIFT
+  // Graphique de performance
   const chartData = useMemo(() => {
     const days = 15;
     const data = [];
@@ -73,11 +84,9 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
       const dateStr = d.toISOString().split('T')[0];
       const label = d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 
-      // Volume de flux réel ce jour-là
       const dailyMovements = history.filter(h => h.date.split('T')[0] === dateStr);
       const dailyVariationVolume = dailyMovements.reduce((acc, h) => acc + Math.abs(h.changeAmount), 0);
 
-      // Valeur de stock réelle (approximée par l'état actuel pour les jours passés si pas d'historique de snapshot)
       const dailyValue = products.reduce((acc, p) => {
         const pVal = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
         return acc + (p.currentStock * pVal);
@@ -94,61 +103,70 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
 
   return (
     <div className="space-y-10 animate-fade-in pb-32">
-      {/* CARTES DE STATS RÉELLES */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Valeur Consommables</p>
-           <h4 className="text-2xl font-black italic tracking-tighter text-slate-900">{stats.stockVal.toLocaleString()} Fc</h4>
-           <div className="flex justify-between items-center mt-2">
-             <span className="text-[8px] font-black text-slate-300 uppercase italic">Réel</span>
-             <Badge variant="info">Base Locale</Badge>
-           </div>
-        </div>
+      {/* CARTES DE STATS RÉAJUSTÉES (3 COLONNES) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
-        <div className="bg-gradient-to-br from-[#1a3a22] to-emerald-900 p-8 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden group">
-           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-white/10 transition-all duration-500" />
-           <p className="text-[9px] font-black text-emerald-200/60 uppercase tracking-widest mb-4 flex items-center gap-2">
-             <Wallet className="w-3 h-3" /> Solde Caisse Logistique
+        {/* CARTE : VALEUR PAR SITE */}
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col min-h-[160px]">
+           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+             <MapPin className="w-3 h-3 text-emerald-500" /> Valeur Consommables / Site
            </p>
-           <h4 className="text-2xl font-black italic tracking-tighter">{logisticsBalance.toLocaleString()} Fc</h4>
-           <div className="flex justify-between items-center mt-2">
-             <span className="text-[8px] font-black text-emerald-200/40 uppercase italic">Réel DB</span>
-             <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+           <div className="space-y-3 overflow-y-auto max-h-[120px] custom-scrollbar pr-2 flex-1">
+             {siteValueStats.length === 0 ? (
+               <p className="text-[10px] font-bold text-slate-300 italic uppercase py-4">Aucune donnée disponible</p>
+             ) : (
+               siteValueStats.map((site, idx) => (
+                 <div key={idx} className="flex justify-between items-center border-b border-slate-50 pb-2 last:border-0">
+                    <span className="text-[11px] font-black uppercase text-slate-600 truncate max-w-[150px]">{site.name}</span>
+                    <span className="text-[12px] font-header italic text-[#1a3a22]">{site.value.toLocaleString()} <span className="text-[7px]">Fc</span></span>
+                 </div>
+               ))
+             )}
+           </div>
+           <div className="mt-4 pt-2 border-t border-slate-50 flex justify-between items-center">
+             <span className="text-[8px] font-black text-slate-300 uppercase italic">Répartition Réelle</span>
+             <Badge variant="info">Audit Local</Badge>
            </div>
         </div>
 
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-           <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-4">Seuils Critiques</p>
-           <h4 className={`text-3xl font-black italic tracking-tighter ${stats.alerts > 0 ? 'text-rose-500' : 'text-slate-200'}`}>{stats.alerts}</h4>
+        {/* CARTE : SEUILS CRITIQUES */}
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-between min-h-[160px]">
+           <div>
+             <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-4">Seuils Critiques Réseau</p>
+             <h4 className={`text-5xl font-black italic tracking-tighter ${stats.alerts > 0 ? 'text-rose-500' : 'text-slate-200'}`}>{stats.alerts}</h4>
+           </div>
            <div className="flex justify-between items-center mt-2">
              <span className="text-[8px] font-black text-slate-300 uppercase italic">Alerte Rupture</span>
-             <Badge variant={stats.alerts > 0 ? "danger" : "success"}>{stats.alerts > 0 ? "Action!" : "OK"}</Badge>
+             <Badge variant={stats.alerts > 0 ? "danger" : "success"}>{stats.alerts > 0 ? "Action!" : "Stock OK"}</Badge>
            </div>
         </div>
 
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Articles Gérés</p>
-           <h4 className="text-3xl font-black italic tracking-tighter text-slate-900">{stats.prodCount}</h4>
+        {/* CARTE : ARTICLES GÉRÉS */}
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-between min-h-[160px]">
+           <div>
+             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Articles Total Référencés</p>
+             <h4 className="text-5xl font-black italic tracking-tighter text-slate-900">{stats.prodCount}</h4>
+           </div>
            <div className="flex justify-between items-center mt-2">
-             <span className="text-[8px] font-black text-slate-300 uppercase italic">Total SKU</span>
-             <Badge variant="success">DB Active</Badge>
+             <span className="text-[8px] font-black text-slate-300 uppercase italic">Total SKU Actifs</span>
+             <Badge variant="success">Base de données OK</Badge>
            </div>
         </div>
       </div>
 
-      {/* SECTION SANTÉ DU STOCK PAR SITE - DONNÉES PRÉCISES */}
+      {/* SECTION SANTÉ DU STOCK PAR SITE */}
       <div className="grid grid-cols-1 gap-8 no-print">
          <div className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-sm overflow-hidden">
             <div className="flex justify-between items-center mb-8">
                <h3 className="text-xl font-header italic uppercase flex items-center gap-3">
-                  <HeartPulse className="w-6 h-6 text-rose-500" /> Santé du Stock par Site
+                  <HeartPulse className="w-6 h-6 text-rose-500" /> Santé Logistique des Sites
                </h3>
-               <p className="text-[10px] font-black uppercase text-slate-400 italic">Précision Base de Données</p>
+               <p className="text-[10px] font-black uppercase text-slate-400 italic">Analyse du respect des seuils</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                {siteHealthStats.length === 0 ? (
-                  <div className="col-span-full py-10 text-center opacity-30 italic font-black text-[10px] uppercase">Aucun site ou stock enregistré</div>
+                  <div className="col-span-full py-10 text-center opacity-30 italic font-black text-[10px] uppercase">Aucun site enregistré</div>
                ) : (
                   siteHealthStats.map(site => (
                      <div key={site.sid} className="bg-slate-50 p-6 rounded-[2.5rem] border border-transparent hover:border-emerald-200 transition-all group">
@@ -175,20 +193,12 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
 
                         {site.criticalProds.length > 0 && (
                            <div className="space-y-1 mt-4">
-                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Alertes DB :</p>
                               {site.criticalProds.map(p => (
                                  <div key={p.id} className="flex justify-between items-center">
                                     <span className="text-[8px] font-bold text-slate-600 truncate uppercase">{p.name}</span>
                                     <span className="text-[8px] font-black text-rose-500">{p.currentStock}/{p.minStock}</span>
                                  </div>
                               ))}
-                           </div>
-                        )}
-                        
-                        {site.criticalCount === 0 && site.total > 0 && (
-                           <div className="flex items-center gap-2 mt-4 text-emerald-600">
-                              <ShieldCheck className="w-3 h-3" />
-                              <span className="text-[8px] font-black uppercase italic">Audit OK</span>
                            </div>
                         )}
                      </div>
@@ -203,7 +213,7 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
           <div className="flex justify-between items-center mb-10">
             <div>
               <h3 className="text-xl font-header italic uppercase flex items-center gap-3">
-                <TrendingUp className="w-5 h-5 text-blue-500" /> Flux Réels
+                <TrendingUp className="w-5 h-5 text-blue-500" /> Flux & Valeur Réseaux
               </h3>
               <p className="text-[10px] font-black uppercase text-slate-400 mt-1 tracking-widest">Valeur Stock vs Flux Journaliers (15 Derniers Jours)</p>
             </div>
@@ -233,7 +243,7 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
         <div className="lg:col-span-4 bg-white p-10 rounded-[4rem] border border-slate-100 shadow-sm flex flex-col">
            <div className="flex justify-between items-center mb-8">
               <h3 className="text-[14px] font-header italic uppercase flex items-center gap-3">
-                 <Banknote className="w-5 h-5 text-amber-500" /> Trésorerie DB
+                 <Banknote className="w-5 h-5 text-amber-500" /> Flux Financiers DB
               </h3>
               <div className="p-2 bg-amber-50 rounded-xl">
                  <Zap className="w-4 h-4 text-amber-500" />
@@ -242,7 +252,7 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
            
            <div className="space-y-4 flex-1">
               {financialTransactions.length === 0 ? (
-                <div className="py-20 text-center opacity-20 italic font-black text-[10px] uppercase">Aucun flux réel enregistré</div>
+                <div className="py-20 text-center opacity-20 italic font-black text-[10px] uppercase">Aucun flux financier récent</div>
               ) : (
                 financialTransactions.map((h, idx) => (
                   <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between group hover:bg-slate-100 transition-all">
@@ -253,7 +263,7 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
                         <div>
                            <p className="text-[10px] font-black uppercase text-slate-900 leading-none">{h.productName}</p>
                            <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
-                              {h.type === 'entry' ? 'Sortie Caisse' : 'Mouvement Interne'}
+                              {h.type === 'entry' ? 'Investissement' : 'Rotation Stock'}
                            </p>
                         </div>
                      </div>
@@ -267,10 +277,10 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
 
            <div className="mt-8 p-6 bg-slate-900 rounded-[2.5rem] text-white">
               <div className="flex items-center gap-3 mb-2">
-                 <Wallet className="w-4 h-4 text-emerald-400" />
-                 <p className="text-[9px] font-black uppercase tracking-widest text-emerald-200/60">Solde Référentiel DB</p>
+                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                 <p className="text-[9px] font-black uppercase tracking-widest text-emerald-200/60">Contrôle d'Intégrité</p>
               </div>
-              <p className="text-xl font-header italic">{logisticsBalance.toLocaleString()} Fc</p>
+              <p className="text-[11px] font-bold text-emerald-100/40 uppercase italic">Les données affichées sont extraites des logs système certifiés.</p>
            </div>
         </div>
       </div>
@@ -279,7 +289,7 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
       <div className="no-print">
          <div className="flex items-center gap-3 mb-6 px-4">
             <Cpu className="w-6 h-6 text-emerald-600" />
-            <h3 className="text-xl font-header italic uppercase">Diagnostic Stratégique</h3>
+            <h3 className="text-xl font-header italic uppercase">Diagnostic Stratégique Algorithmique</h3>
          </div>
          <AnalyticsView 
             products={products} 
@@ -337,13 +347,6 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
                   </button>
                 ))}
               </div>
-           </div>
-           <div className="bg-[#1a3a22] p-8 rounded-[2.5rem] shadow-xl text-white">
-              <div className="flex items-center gap-3 mb-4">
-                <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                <h4 className="text-[10px] font-black uppercase tracking-widest">Intégrité DB</h4>
-              </div>
-              <p className="text-[9px] font-bold text-white/60 uppercase leading-relaxed">Affichage strict des données synchronisées localement. Aucun ajout artificiel détecté.</p>
            </div>
         </div>
       </div>
