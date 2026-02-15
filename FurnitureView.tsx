@@ -6,6 +6,7 @@ import {
   Download, Upload, FileSpreadsheet, ArrowRightLeft, Info,
   History, ClipboardList, TrendingDown, TrendingUp, ChevronRight, FileUp, MessageSquare, FileDown
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Furniture, Site, FurnitureAuditSession, FurnitureAuditItem } from './types';
 import { Badge } from './Badge';
 
@@ -60,7 +61,6 @@ export const FurnitureView = ({
     };
   }, [furniture]);
 
-  // Classement et Filtrage : Tri par Service (Site) puis par Article
   const filteredAndSortedFurniture = useMemo(() => {
     return furniture
       .filter(f => {
@@ -133,7 +133,7 @@ export const FurnitureView = ({
       f.code,
       f.currentCount,
       f.condition,
-      (f.comment || "").replace(/;/g, ",") // Éviter de casser le CSV
+      (f.comment || "").replace(/;/g, ",") 
     ]);
 
     const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(";")).join("\n");
@@ -145,6 +145,72 @@ export const FurnitureView = ({
     link.click();
     document.body.removeChild(link);
     notify("Registre mobilier exporté en CSV.");
+  };
+
+  // Traitement d'import local avec notification détaillée
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+
+        if (data.length <= 1) {
+          notify("Le fichier est vide ou l'en-tête est manquant.", "error");
+          return;
+        }
+
+        const newItems: Furniture[] = [];
+        let errors = 0;
+        let successes = 0;
+
+        for (let i = 1; i < data.length; i++) {
+          const row = data[i];
+          if (!row || row.length === 0 || (row.length === 1 && !row[0])) continue;
+
+          const [siteName, name, code, count, condition, comment] = row;
+          
+          const site = sites.find(s => s.name.toLowerCase() === String(siteName || '').trim().toLowerCase());
+          
+          if (!name || !site) {
+            errors++;
+            continue;
+          }
+
+          const validConditions = ['Neuf', 'Bon', 'Usé', 'Endommagé'];
+          const finalCondition = validConditions.includes(String(condition)) ? condition : 'Bon';
+
+          newItems.push({
+            id: `F-IMP-${Date.now()}-${i}`,
+            siteId: site.id,
+            name: String(name).trim().toUpperCase(),
+            code: String(code || `MOB-${Math.random().toString(36).substr(2, 6).toUpperCase()}`).trim(),
+            currentCount: Number(count) || 1,
+            condition: finalCondition as any,
+            lastChecked: new Date().toISOString(),
+            comment: String(comment || '').trim()
+          });
+          successes++;
+        }
+
+        if (newItems.length > 0) {
+          setFurniture([...newItems, ...furniture]);
+          notify(`${successes} article(s) importé(s). ${errors > 0 ? `${errors} ligne(s) ignorée(s) (Service inconnu ou données manquantes).` : 'Intégrité 100%.'}`, errors > 0 ? 'warning' : 'success');
+        } else {
+          notify(`Échec de l'import : aucune donnée valide détectée (${errors} erreurs).`, "error");
+        }
+      } catch (err) {
+        notify("Erreur technique lors de la lecture du fichier Excel/CSV.", "error");
+      }
+      if (e.target) e.target.value = '';
+    };
+    reader.readAsBinaryString(file);
   };
 
   return (
@@ -177,7 +243,7 @@ export const FurnitureView = ({
                  type="file" 
                  accept=".csv, .xlsx, .xls" 
                  className="hidden" 
-                 onChange={onImportFurniture} 
+                 onChange={handleFileImport} 
                />
                <button 
                  onClick={() => furnitureImportRef.current?.click()}
@@ -392,7 +458,6 @@ export const FurnitureView = ({
         </div>
       )}
 
-      {/* FOOTER INFO IMPORT */}
       <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 flex items-center gap-4 no-print opacity-60">
         <Info className="w-5 h-5 text-emerald-500" />
         <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-loose">
