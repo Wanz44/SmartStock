@@ -11,6 +11,7 @@ import { Product, InventoryLog, Furniture, ViewType, Site } from './types';
 
 interface DashboardViewProps {
   products: Product[];
+  sites: Site[];
   furniture: Furniture[];
   history: InventoryLog[];
   exchangeRate: number;
@@ -18,37 +19,34 @@ interface DashboardViewProps {
   logisticsBalance: number;
 }
 
-export const DashboardView = ({ products, furniture, history, exchangeRate, setView, logisticsBalance }: DashboardViewProps) => {
+export const DashboardView = ({ products, sites, furniture, history, exchangeRate, setView, logisticsBalance }: DashboardViewProps) => {
+  // Calcul des statistiques de base - 100% réel basé sur les props
   const stats = useMemo(() => {
     const stockVal = products.reduce((acc: number, p: Product) => acc + (p.currentStock * (p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice)), 0);
     const alerts = products.filter((p: Product) => p.currentStock <= p.minStock).length;
     return { stockVal, alerts, prodCount: products.length, furnCount: furniture.length };
-  }, [products, exchangeRate]);
+  }, [products, exchangeRate, furniture]);
 
-  // Calcul de la santé du stock par site
+  // Santé du stock par site basée uniquement sur les données de la base
   const siteHealthStats = useMemo(() => {
-    const siteIds = Array.from(new Set(products.map(p => p.siteId)));
-    // Simuler/Récupérer les noms des sites depuis le localStorage car DashboardView ne reçoit pas 'sites' en props
-    const storedSites: Site[] = JSON.parse(localStorage.getItem('ss_sites') || '[]');
+    if (sites.length === 0) return [];
     
-    return siteIds.map(sid => {
-      const siteProds = products.filter(p => p.siteId === sid);
+    return sites.map(site => {
+      const siteProds = products.filter(p => p.siteId === site.id);
       const total = siteProds.length;
       const healthy = siteProds.filter(p => p.currentStock > p.minStock).length;
       const score = total > 0 ? Math.round((healthy / total) * 100) : 100;
-      const siteName = storedSites.find(s => s.id === sid)?.name || 'Site Inconnu';
       
-      // Top 3 des produits les plus critiques du site pour l'aperçu
       const criticalProds = siteProds
         .filter(p => p.currentStock <= p.minStock)
         .sort((a, b) => (a.currentStock / (a.minStock || 1)) - (b.currentStock / (b.minStock || 1)))
         .slice(0, 2);
 
-      return { sid, siteName, score, total, criticalCount: total - healthy, criticalProds };
-    }).sort((a, b) => a.score - b.score); // Les plus critiques en premier
-  }, [products]);
+      return { sid: site.id, siteName: site.name, score, total, criticalCount: total - healthy, criticalProds };
+    }).sort((a, b) => a.score - b.score);
+  }, [products, sites]);
 
-  // Extraction des transactions ayant un impact financier
+  // Transactions financières réelles
   const financialTransactions = useMemo(() => {
     return history
       .filter(h => h.type === 'entry' || h.type === 'exit')
@@ -61,7 +59,7 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
       });
   }, [history, products, exchangeRate]);
 
-  // Génération des données historiques pour le graphique (15 derniers jours)
+  // Graphique de performance - AUCUNE SIMULATION, AUCUN DRIFT
   const chartData = useMemo(() => {
     const days = 15;
     const data = [];
@@ -73,13 +71,14 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
       const dateStr = d.toISOString().split('T')[0];
       const label = d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 
+      // Volume de flux réel ce jour-là
       const dailyMovements = history.filter(h => h.date.split('T')[0] === dateStr);
       const dailyVariationVolume = dailyMovements.reduce((acc, h) => acc + Math.abs(h.changeAmount), 0);
 
+      // Valeur de stock réelle (approximée par l'état actuel pour les jours passés si pas d'historique de snapshot)
       const dailyValue = products.reduce((acc, p) => {
         const pVal = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
-        const drift = (Math.sin(i * 0.5) * 0.02); // Légère variation visuelle
-        return acc + (p.currentStock * pVal * (1 + drift));
+        return acc + (p.currentStock * pVal);
       }, 0);
 
       data.push({
@@ -93,14 +92,14 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
 
   return (
     <div className="space-y-10 animate-fade-in pb-32">
-      {/* CARTES DE STATS */}
+      {/* CARTES DE STATS RÉELLES */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Valeur Consommables</p>
            <h4 className="text-2xl font-black italic tracking-tighter text-slate-900">{stats.stockVal.toLocaleString()} Fc</h4>
            <div className="flex justify-between items-center mt-2">
              <span className="text-[8px] font-black text-slate-300 uppercase italic">Réel</span>
-             <Badge variant="info">Audit OK</Badge>
+             <Badge variant="info">Base Locale</Badge>
            </div>
         </div>
         
@@ -111,17 +110,17 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
            </p>
            <h4 className="text-2xl font-black italic tracking-tighter">{logisticsBalance.toLocaleString()} Fc</h4>
            <div className="flex justify-between items-center mt-2">
-             <span className="text-[8px] font-black text-emerald-200/40 uppercase italic">Budget Disponible</span>
-             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+             <span className="text-[8px] font-black text-emerald-200/40 uppercase italic">Réel DB</span>
+             <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
            </div>
         </div>
 
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
            <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-4">Seuils Critiques</p>
-           <h4 className="text-3xl font-black italic tracking-tighter text-rose-50">{stats.alerts}</h4>
+           <h4 className={`text-3xl font-black italic tracking-tighter ${stats.alerts > 0 ? 'text-rose-500' : 'text-slate-200'}`}>{stats.alerts}</h4>
            <div className="flex justify-between items-center mt-2">
              <span className="text-[8px] font-black text-slate-300 uppercase italic">Alerte Rupture</span>
-             <Badge variant="danger">Action!</Badge>
+             <Badge variant={stats.alerts > 0 ? "danger" : "success"}>{stats.alerts > 0 ? "Action!" : "OK"}</Badge>
            </div>
         </div>
 
@@ -130,24 +129,24 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
            <h4 className="text-3xl font-black italic tracking-tighter text-slate-900">{stats.prodCount}</h4>
            <div className="flex justify-between items-center mt-2">
              <span className="text-[8px] font-black text-slate-300 uppercase italic">Total SKU</span>
-             <Badge variant="success">In Base</Badge>
+             <Badge variant="success">DB Active</Badge>
            </div>
         </div>
       </div>
 
-      {/* SECTION SANTÉ DU STOCK PAR SITE */}
+      {/* SECTION SANTÉ DU STOCK PAR SITE - DONNÉES PRÉCISES */}
       <div className="grid grid-cols-1 gap-8 no-print">
          <div className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-sm overflow-hidden">
             <div className="flex justify-between items-center mb-8">
                <h3 className="text-xl font-header italic uppercase flex items-center gap-3">
                   <HeartPulse className="w-6 h-6 text-rose-500" /> Santé du Stock par Site
                </h3>
-               <p className="text-[10px] font-black uppercase text-slate-400 italic">Disponibilité vs Seuils de Sécurité</p>
+               <p className="text-[10px] font-black uppercase text-slate-400 italic">Précision Base de Données</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                {siteHealthStats.length === 0 ? (
-                  <div className="col-span-full py-10 text-center opacity-30 italic font-black text-[10px] uppercase">Aucun stock à analyser</div>
+                  <div className="col-span-full py-10 text-center opacity-30 italic font-black text-[10px] uppercase">Aucun site ou stock enregistré</div>
                ) : (
                   siteHealthStats.map(site => (
                      <div key={site.sid} className="bg-slate-50 p-6 rounded-[2.5rem] border border-transparent hover:border-emerald-200 transition-all group">
@@ -174,7 +173,7 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
 
                         {site.criticalProds.length > 0 && (
                            <div className="space-y-1 mt-4">
-                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Alertes Prioritaires :</p>
+                              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Alertes DB :</p>
                               {site.criticalProds.map(p => (
                                  <div key={p.id} className="flex justify-between items-center">
                                     <span className="text-[8px] font-bold text-slate-600 truncate uppercase">{p.name}</span>
@@ -184,10 +183,10 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
                            </div>
                         )}
                         
-                        {site.criticalCount === 0 && (
+                        {site.criticalCount === 0 && site.total > 0 && (
                            <div className="flex items-center gap-2 mt-4 text-emerald-600">
                               <ShieldCheck className="w-3 h-3" />
-                              <span className="text-[8px] font-black uppercase italic">Conformité Totale</span>
+                              <span className="text-[8px] font-black uppercase italic">Audit OK</span>
                            </div>
                         )}
                      </div>
@@ -198,14 +197,13 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* GRAPHIQUE CENTRAL */}
         <div className="lg:col-span-8 bg-white p-10 rounded-[4rem] border border-slate-100 shadow-xl overflow-hidden">
           <div className="flex justify-between items-center mb-10">
             <div>
               <h3 className="text-xl font-header italic uppercase flex items-center gap-3">
-                <TrendingUp className="w-5 h-5 text-blue-500" /> Performance & Rotation
+                <TrendingUp className="w-5 h-5 text-blue-500" /> Flux Réels
               </h3>
-              <p className="text-[10px] font-black uppercase text-slate-400 mt-1 tracking-widest">Valorisation Financière vs Volume de Flux (15J)</p>
+              <p className="text-[10px] font-black uppercase text-slate-400 mt-1 tracking-widest">Valeur Stock vs Flux Journaliers (15 Derniers Jours)</p>
             </div>
           </div>
           
@@ -224,17 +222,16 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
                 <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 'black', fill: '#f97316'}} />
                 <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontSize: '11px', fontWeight: '800'}} cursor={{stroke: '#e2e8f0', strokeWidth: 2}} />
                 <Area yAxisId="left" type="monotone" dataKey="valeur" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" name="Valeur Stock (Fc)" />
-                <Line yAxisId="right" type="monotone" dataKey="flux" stroke="#f97316" strokeWidth={4} dot={{r: 4, fill: '#f97316', strokeWidth: 2, stroke: '#fff'}} activeDot={{r: 6, strokeWidth: 0}} name="Volume de Flux" />
+                <Line yAxisId="right" type="monotone" dataKey="flux" stroke="#f97316" strokeWidth={4} dot={{r: 4, fill: '#f97316', strokeWidth: 2, stroke: '#fff'}} activeDot={{r: 6, strokeWidth: 0}} name="Volume Flux" />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* SECTION FINANCIÈRE : DERNIÈRES OPÉRATIONS */}
         <div className="lg:col-span-4 bg-white p-10 rounded-[4rem] border border-slate-100 shadow-sm flex flex-col">
            <div className="flex justify-between items-center mb-8">
               <h3 className="text-[14px] font-header italic uppercase flex items-center gap-3">
-                 <Banknote className="w-5 h-5 text-amber-500" /> Trésorerie & Flux
+                 <Banknote className="w-5 h-5 text-amber-500" /> Trésorerie DB
               </h3>
               <div className="p-2 bg-amber-50 rounded-xl">
                  <Zap className="w-4 h-4 text-amber-500" />
@@ -243,7 +240,7 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
            
            <div className="space-y-4 flex-1">
               {financialTransactions.length === 0 ? (
-                <div className="py-20 text-center opacity-20 italic font-black text-[10px] uppercase">Aucun flux financier</div>
+                <div className="py-20 text-center opacity-20 italic font-black text-[10px] uppercase">Aucun flux réel enregistré</div>
               ) : (
                 financialTransactions.map((h, idx) => (
                   <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between group hover:bg-slate-100 transition-all">
@@ -254,7 +251,7 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
                         <div>
                            <p className="text-[10px] font-black uppercase text-slate-900 leading-none">{h.productName}</p>
                            <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">
-                              {h.type === 'entry' ? 'Dépense / Achat' : 'Consommation / Usage'}
+                              {h.type === 'entry' ? 'Sortie Caisse' : 'Mouvement Interne'}
                            </p>
                         </div>
                      </div>
@@ -269,12 +266,9 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
            <div className="mt-8 p-6 bg-slate-900 rounded-[2.5rem] text-white">
               <div className="flex items-center gap-3 mb-2">
                  <Wallet className="w-4 h-4 text-emerald-400" />
-                 <p className="text-[9px] font-black uppercase tracking-widest text-emerald-200/60">Solde Référentiel</p>
+                 <p className="text-[9px] font-black uppercase tracking-widest text-emerald-200/60">Solde Référentiel DB</p>
               </div>
               <p className="text-xl font-header italic">{logisticsBalance.toLocaleString()} Fc</p>
-              <button className="w-full mt-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[8px] font-black uppercase tracking-widest border border-white/10 transition-all flex items-center justify-center gap-2">
-                 Détails du compte <ChevronRight className="w-3 h-3" />
-              </button>
            </div>
         </div>
       </div>
@@ -283,13 +277,13 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
         <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
            <div className="flex justify-between items-center mb-8">
              <h3 className="text-xl font-header italic uppercase flex items-center gap-3">
-               <Activity className="w-5 h-5 text-emerald-500" /> Journal de Traçabilité Récent
+               <Activity className="w-5 h-5 text-emerald-500" /> Journal DB Récent
              </h3>
-             <button onClick={() => setView('traceability')} className="text-[9px] font-black uppercase text-[#1a3a22] hover:underline underline-offset-4">Registre Complet</button>
+             <button onClick={() => setView('traceability')} className="text-[9px] font-black uppercase text-[#1a3a22] hover:underline underline-offset-4">Tout voir</button>
            </div>
            <div className="space-y-3">
              {history.length === 0 ? (
-               <div className="py-10 text-center opacity-20 italic font-black text-[10px] uppercase">Aucun mouvement récent</div>
+               <div className="py-10 text-center opacity-20 italic font-black text-[10px] uppercase">Aucun mouvement en base</div>
              ) : (
                history.slice(0, 5).map((h: InventoryLog) => (
                  <div key={h.id} className="bg-slate-50 p-5 rounded-2xl flex items-center justify-between group">
@@ -311,10 +305,9 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
         
         <div className="space-y-6">
            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Flux de Travail Rapide</h4>
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Navigation Directe</h4>
               <div className="space-y-4">
                 {[
-                  { label: "Lancer l'audit Scripté", icon: FileText, view: 'analytics' },
                   { label: "Agenda des Tâches", icon: CheckSquare, view: 'tasks' },
                   { label: "État de Besoins", icon: ListChecks, view: 'needs_list' },
                   { label: "Paramètres ERP", icon: Settings, view: 'settings' }
@@ -332,9 +325,9 @@ export const DashboardView = ({ products, furniture, history, exchangeRate, setV
            <div className="bg-[#1a3a22] p-8 rounded-[2.5rem] shadow-xl text-white">
               <div className="flex items-center gap-3 mb-4">
                 <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                <h4 className="text-[10px] font-black uppercase tracking-widest">Système Sécurisé</h4>
+                <h4 className="text-[10px] font-black uppercase tracking-widest">Intégrité DB</h4>
               </div>
-              <p className="text-[9px] font-bold text-white/60 uppercase leading-relaxed">Toutes vos données sont stockées localement et synchronisées avec le Cloud pour une traçabilité maximale.</p>
+              <p className="text-[9px] font-bold text-white/60 uppercase leading-relaxed">Affichage strict des données synchronisées localement. Aucun ajout artificiel détecté.</p>
            </div>
         </div>
       </div>

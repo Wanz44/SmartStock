@@ -56,7 +56,9 @@ const App: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.SUPPLIERS) || JSON.stringify(INITIAL_SUPPLIERS)));
   const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.TASKS) || '[]'));
   const [needsHistory, setNeedsHistory] = useState<NeedReport[]>(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.NEEDS) || '[]'));
-  const [logisticsBalance, setLogisticsBalance] = useState<number>(() => Number(localStorage.getItem(STORAGE_KEYS.BALANCE) || '5000000'));
+  
+  // Correction : Initialisation du solde à 0 par défaut pour respecter la remise à zéro des compteurs.
+  const [logisticsBalance, setLogisticsBalance] = useState<number>(() => Number(localStorage.getItem(STORAGE_KEYS.BALANCE) || '0'));
   
   const [trashProducts, setTrashProducts] = useState<Product[]>(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.TRASH_PRODUCTS) || '[]'));
   const [trashFurniture, setTrashFurniture] = useState<Furniture[]>(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.TRASH_FURNITURE) || '[]'));
@@ -117,9 +119,6 @@ const App: React.FC = () => {
     }, 4000);
   };
 
-  /**
-   * Fix: Added 'transfer' to the type parameter to match InventoryLog and component requirements.
-   */
   const handleTransaction = (prodId: string, amount: number, reason: string, type: 'entry' | 'exit' | 'transfer' | 'adjustment' | 'manual_update') => {
     setProducts(prev => prev.map(p => {
       if (p.id === prodId) {
@@ -138,7 +137,6 @@ const App: React.FC = () => {
         };
         setHistory(prevHist => [log, ...prevHist]);
         
-        // Impact financier (simulé)
         if (type === 'entry') {
           const cost = Math.abs(amount) * (p.currency === '$' ? p.unitPrice * settings.exchangeRate : p.unitPrice);
           setLogisticsBalance(prevB => prevB - cost);
@@ -189,7 +187,7 @@ const App: React.FC = () => {
       ...p,
       id: `P-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       siteId,
-      currentStock: 0 // On repart à zéro sur un nouveau site par sécurité
+      currentStock: 0
     }));
     setProducts(prev => [...prev, ...newItems]);
     setCopiedProducts([]);
@@ -201,14 +199,13 @@ const App: React.FC = () => {
     window.location.reload();
   };
 
-  // --- RENDER ---
   if (!isLoggedIn) {
     return <LoginView enterpriseName={settings.enterpriseName} onLogin={() => setIsLoggedIn(true)} />;
   }
 
   const renderView = () => {
     switch (view) {
-      case 'dashboard': return <DashboardView products={products} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setView} logisticsBalance={logisticsBalance} />;
+      case 'dashboard': return <DashboardView products={products} sites={sites} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setView} logisticsBalance={logisticsBalance} />;
       case 'inventory': return (
         <InventoryView 
           products={products} 
@@ -259,7 +256,7 @@ const App: React.FC = () => {
         />
       );
       case 'settings': return <SettingsView settings={settings} onUpdateSettings={setSettings} onResetSystem={resetSystem} notify={notify} />;
-      default: return <DashboardView products={products} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setView} logisticsBalance={logisticsBalance} />;
+      default: return <DashboardView products={products} sites={sites} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setView} logisticsBalance={logisticsBalance} />;
     }
   };
 
@@ -279,7 +276,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* SIDEBAR */}
       <aside className={`sidebar-float transition-all duration-500 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[280px]'}`}>
         <div className="flex items-center gap-3 px-4 mb-10">
           <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
@@ -312,7 +308,6 @@ const App: React.FC = () => {
         </button>
       </aside>
 
-      {/* MAIN CONTENT */}
       <main className={`flex-1 transition-all duration-500 p-10 ${isSidebarOpen ? 'ml-[300px]' : 'ml-10'}`}>
         <header className="flex justify-between items-center mb-10 no-print">
           <div className="flex items-center gap-6">
@@ -346,7 +341,6 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* NOTIFICATIONS TOAST */}
       <div className="fixed bottom-10 right-10 z-[5000] space-y-4 pointer-events-none">
         {notifications.map(n => (
           <div key={n.id} className={`p-6 rounded-[2rem] shadow-2xl flex items-center gap-4 border animate-slide-in pointer-events-auto bg-white ${
@@ -369,7 +363,6 @@ const App: React.FC = () => {
   );
 };
 
-// Types supplementaires pour MovementsView
 interface ArrowRightLeftProps { className?: string; }
 const ArrowRightLeft = ({ className }: ArrowRightLeftProps) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 9 3-3 3 3"/><path d="M13 18H5a2 2 0 0 1-2-2V6"/><path d="m22 15-3 3-3-3"/><path d="M11 6h8a2 2 0 0 1 2 2v10"/></svg>
