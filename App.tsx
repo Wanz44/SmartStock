@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Package, Lamp, MapPin, 
   Truck, History, CheckSquare, ListChecks, 
   Settings, LogOut, Trash2, Activity,
-  Bell, Menu, X, Search, AlertTriangle
+  Bell, Menu, X, Search, AlertTriangle, ChevronRight, Terminal
 } from 'lucide-react';
 
 import { DashboardView } from './DashboardView';
@@ -19,6 +19,7 @@ import { SettingsView } from './SettingsView';
 import { MovementsView } from './MovementsView';
 import { TrashView } from './TrashView';
 import { LoginView } from './LoginView';
+import { AnalyticsView } from './AnalyticsView';
 
 import { 
   INITIAL_PRODUCTS, INITIAL_SITES, INITIAL_FURNITURE, 
@@ -28,6 +29,7 @@ import {
   Product, Site, Furniture, InventoryLog, Supplier, 
   Task, NeedReport, AppSettings, ViewType 
 } from './types';
+import { Badge } from './Badge';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'ss_products',
@@ -45,7 +47,7 @@ const STORAGE_KEYS = {
 
 const App: React.FC = () => {
   // --- STATE ---
-  const [view, setView] = useState<ViewType>('dashboard');
+  const [view, setView] = useState<ViewType | 'search'>('dashboard');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
@@ -57,7 +59,6 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.TASKS) || '[]'));
   const [needsHistory, setNeedsHistory] = useState<NeedReport[]>(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.NEEDS) || '[]'));
   
-  // Correction : Initialisation du solde à 0 par défaut pour respecter la remise à zéro des compteurs.
   const [logisticsBalance, setLogisticsBalance] = useState<number>(() => Number(localStorage.getItem(STORAGE_KEYS.BALANCE) || '0'));
   
   const [trashProducts, setTrashProducts] = useState<Product[]>(() => JSON.parse(localStorage.getItem(STORAGE_KEYS.TRASH_PRODUCTS) || '[]'));
@@ -199,13 +200,98 @@ const App: React.FC = () => {
     window.location.reload();
   };
 
+  // --- INTERNAL SEARCH VIEW ---
+  const GlobalSearchView = () => {
+    const [query, setQuery] = useState('');
+    const results = useMemo(() => {
+      if (!query || query.length < 2) return { products: [], furniture: [] };
+      const q = query.toLowerCase();
+      return {
+        products: products.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)),
+        furniture: furniture.filter(f => f.name.toLowerCase().includes(q) || f.code.toLowerCase().includes(q))
+      };
+    }, [query]);
+
+    return (
+      <div className="space-y-10 animate-fade-in pb-32">
+        <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-sm">
+          <div className="relative">
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-8 h-8 text-slate-300" />
+            <input 
+              autoFocus
+              type="text" 
+              placeholder="RECHERCHER DANS TOUTE LA BASE : ARTICLES, CODES, PATRIMOINE..." 
+              className="w-full bg-slate-50 border border-slate-100 pl-16 pr-6 py-8 rounded-[2.5rem] text-2xl font-header italic outline-none focus:ring-4 focus:ring-[#1a3a22]/10 transition-all"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          <div className="space-y-6">
+            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] px-6 flex items-center gap-3">
+              <Package className="w-4 h-4" /> Consommables ({results.products.length})
+            </h4>
+            <div className="space-y-4">
+              {results.products.length === 0 ? (
+                <div className="p-10 text-center opacity-20 border-2 border-dashed border-slate-200 rounded-[3rem] text-[10px] font-black uppercase italic">Aucun article correspondant</div>
+              ) : (
+                results.products.map(p => (
+                  <div key={p.id} onClick={() => setView('inventory')} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between group hover:border-[#1a3a22] transition-all cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-[#1a3a22] group-hover:text-white transition-all"><Package className="w-5 h-5" /></div>
+                      <div>
+                        <p className="text-[13px] font-black uppercase italic text-slate-900 leading-none">{p.name}</p>
+                        <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">ID: {p.id} • {sites.find(s => s.id === p.siteId)?.name}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-xl font-header italic text-[#1a3a22] leading-none">{p.currentStock}</p>
+                       <Badge variant={p.currentStock <= p.minStock ? 'danger' : 'success'}>{p.unit}</Badge>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] px-6 flex items-center gap-3">
+              <Lamp className="w-4 h-4" /> Patrimoine Mobilier ({results.furniture.length})
+            </h4>
+            <div className="space-y-4">
+              {results.furniture.length === 0 ? (
+                <div className="p-10 text-center opacity-20 border-2 border-dashed border-slate-200 rounded-[3rem] text-[10px] font-black uppercase italic">Aucun mobilier correspondant</div>
+              ) : (
+                results.furniture.map(f => (
+                  <div key={f.id} onClick={() => setView('furniture')} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between group hover:border-[#1a3a22] transition-all cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-slate-50 rounded-2xl group-hover:bg-[#1a3a22] group-hover:text-white transition-all"><Lamp className="w-5 h-5" /></div>
+                      <div>
+                        <p className="text-[13px] font-black uppercase italic text-slate-900 leading-none">{f.name}</p>
+                        <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Ref: {f.code} • {sites.find(s => s.id === f.siteId)?.name}</p>
+                      </div>
+                    </div>
+                    <Badge variant={f.condition === 'Neuf' ? 'success' : f.condition === 'Usé' ? 'warning' : 'info'}>{f.condition}</Badge>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (!isLoggedIn) {
     return <LoginView enterpriseName={settings.enterpriseName} onLogin={() => setIsLoggedIn(true)} />;
   }
 
   const renderView = () => {
     switch (view) {
-      case 'dashboard': return <DashboardView products={products} sites={sites} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setView} logisticsBalance={logisticsBalance} />;
+      case 'dashboard': return <DashboardView products={products} sites={sites} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setView} logisticsBalance={logisticsBalance} settings={settings} />;
+      case 'search': return <GlobalSearchView />;
       case 'inventory': return (
         <InventoryView 
           products={products} 
@@ -256,12 +342,13 @@ const App: React.FC = () => {
         />
       );
       case 'settings': return <SettingsView settings={settings} onUpdateSettings={setSettings} onResetSystem={resetSystem} notify={notify} />;
-      default: return <DashboardView products={products} sites={sites} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setView} logisticsBalance={logisticsBalance} />;
+      default: return <DashboardView products={products} sites={sites} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setView} logisticsBalance={logisticsBalance} settings={settings} />;
     }
   };
 
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
+    { id: 'search', icon: Search, label: 'Recherche globale' },
     { id: 'inventory', icon: Package, label: 'Inventaire' },
     { id: 'movements', icon: ArrowRightLeft, label: 'Mouvements' },
     { id: 'furniture', icon: Lamp, label: 'Patrimoine' },
@@ -284,11 +371,11 @@ const App: React.FC = () => {
           <span className="text-white font-header italic text-lg tracking-tighter">SmartStock <span className="text-emerald-400">Pro</span></span>
         </div>
 
-        <nav className="flex-1 space-y-2">
+        <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-1">
           {navItems.map(item => (
             <button
               key={item.id}
-              onClick={() => setView(item.id as ViewType)}
+              onClick={() => setView(item.id as any)}
               className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
                 view === item.id ? 'nav-item-active' : 'text-emerald-100/60 hover:bg-white/5 hover:text-white'
               }`}
@@ -301,7 +388,7 @@ const App: React.FC = () => {
 
         <button 
           onClick={() => setIsLoggedIn(false)}
-          className="mt-10 flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-rose-300 hover:bg-rose-500/10 transition-all"
+          className="mt-10 flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-rose-300 hover:bg-rose-500/10 transition-all shrink-0"
         >
           <LogOut className="w-5 h-5" />
           Déconnexion
@@ -329,6 +416,9 @@ const App: React.FC = () => {
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                 <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Connecté en tant que Bereckya M.</span>
              </div>
+             <button onClick={() => setView('search')} className="p-4 bg-white rounded-2xl shadow-sm text-slate-400 hover:text-[#1a3a22] transition-colors">
+                <Search className="w-5 h-5" />
+             </button>
              <button className="p-4 bg-white rounded-2xl shadow-sm relative text-slate-400 hover:text-[#1a3a22] transition-colors">
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-3 right-3 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>

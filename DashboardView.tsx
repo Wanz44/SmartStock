@@ -3,11 +3,12 @@ import React, { useMemo } from 'react';
 import { 
   Activity, ChevronRight, FileText, Zap, HardDrive, CheckSquare, 
   ShieldCheck, TrendingUp, ListChecks, Settings, Wallet, 
-  ArrowDownRight, ArrowUpRight, Banknote, HeartPulse, AlertCircle
+  ArrowDownRight, ArrowUpRight, Banknote, HeartPulse, AlertCircle, Cpu
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Line, Legend } from 'recharts';
 import { Badge } from './Badge';
-import { Product, InventoryLog, Furniture, ViewType, Site } from './types';
+import { Product, InventoryLog, Furniture, ViewType, Site, AppSettings } from './types';
+import { AnalyticsView } from './AnalyticsView';
 
 interface DashboardViewProps {
   products: Product[];
@@ -17,9 +18,10 @@ interface DashboardViewProps {
   exchangeRate: number;
   setView: (view: ViewType) => void;
   logisticsBalance: number;
+  settings: AppSettings;
 }
 
-export const DashboardView = ({ products, sites, furniture, history, exchangeRate, setView, logisticsBalance }: DashboardViewProps) => {
+export const DashboardView = ({ products, sites, furniture, history, exchangeRate, setView, logisticsBalance, settings }: DashboardViewProps) => {
   // Calcul des statistiques de base - 100% réel basé sur les props
   const stats = useMemo(() => {
     const stockVal = products.reduce((acc: number, p: Product) => acc + (p.currentStock * (p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice)), 0);
@@ -271,6 +273,20 @@ export const DashboardView = ({ products, sites, furniture, history, exchangeRat
               <p className="text-xl font-header italic">{logisticsBalance.toLocaleString()} Fc</p>
            </div>
         </div>
+      </div>
+
+      {/* SECTION ANALYSE ALGORITHMIQUE INTÉGRÉE */}
+      <div className="no-print">
+         <div className="flex items-center gap-3 mb-6 px-4">
+            <Cpu className="w-6 h-6 text-emerald-600" />
+            <h3 className="text-xl font-header italic uppercase">Diagnostic Stratégique</h3>
+         </div>
+         <AnalyticsView 
+            products={products} 
+            history={history} 
+            sites={sites} 
+            settings={settings} 
+         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
