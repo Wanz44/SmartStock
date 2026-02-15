@@ -12,7 +12,7 @@ interface InventoryViewProps {
   products: Product[];
   settings: AppSettings;
   sites: Site[];
-  onMovement: (prodId: string, val: number, reason: string, type: any) => void;
+  onMovement: (p: Product, val: number) => void;
   onQuickInventory: (prodId: string) => void;
   onEdit: (p: Product) => void;
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -35,16 +35,15 @@ export const InventoryView = ({
 }: InventoryViewProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSite, setFilterSite] = useState('All');
-  const [filterCategory, setFilterCategory] = useState('All');
+  const [filterCategory, setFilterCategory] = useState('All'); // Ajout du filtre catégorie
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const exchangeRate = settings?.exchangeRate || 2850;
+  const exchangeRate = settings.exchangeRate;
 
   const filteredProducts = useMemo(() => {
-    return (products || []).filter((p: Product) => {
-      const matchesSearch = (p.name || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           (p.id || "").toLowerCase().includes(searchTerm.toLowerCase());
+    return products.filter((p: Product) => {
+      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesSite = filterSite === 'All' || p.siteId === filterSite;
       const matchesCategory = filterCategory === 'All' || p.category === filterCategory;
       return matchesSearch && matchesSite && matchesCategory;
@@ -52,10 +51,10 @@ export const InventoryView = ({
   }, [products, searchTerm, filterSite, filterCategory]);
 
   const handleExportCSV = () => {
-    if (!products || products.length === 0) return alert("Aucune donnée à exporter.");
+    if (products.length === 0) return alert("Aucune donnée à exporter.");
     const headers = ["N°", "ID", "Produit", "Catégorie", "Quantité", "Prix Unitaire (Fc)", "Prix Total (Fc)", "Site", "Statut"];
     const rows = products.map((p, idx) => {
-      const siteName = sites?.find(s => s.id === p.siteId)?.name || 'N/A';
+      const siteName = sites.find(s => s.id === p.siteId)?.name || 'N/A';
       const isLow = p.currentStock <= p.minStock;
       const unitPriceFc = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
       const totalPriceFc = p.currentStock * unitPriceFc;
@@ -101,6 +100,7 @@ export const InventoryView = ({
 
   return (
     <div className="space-y-8 animate-fade-in pb-32">
+      {/* TOOLBAR PROFESSIONNELLE */}
       <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-wrap items-center justify-between gap-6 no-print">
         <div className="flex items-center gap-4 flex-1 min-w-[300px]">
           <div className="relative flex-1">
@@ -120,7 +120,7 @@ export const InventoryView = ({
               onChange={(e) => setFilterSite(e.target.value)}
             >
               <option value="All">TOUS LES SITES</option>
-              {(sites || []).map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
+              {sites.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
             </select>
             <select 
               className="bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
@@ -128,7 +128,7 @@ export const InventoryView = ({
               onChange={(e) => setFilterCategory(e.target.value)}
             >
               <option value="All">TOUTES CATÉGORIES</option>
-              {(settings?.categories || []).map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+              {settings.categories.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
             </select>
           </div>
         </div>
@@ -165,6 +165,7 @@ export const InventoryView = ({
         <input ref={fileInputRef} type="file" accept=".csv, .xlsx, .xls" className="hidden" onChange={onImport} />
       </div>
 
+      {/* TABLEAU RÉALIGNÉ : N°, ID, Produit, Catégorie, Quantité, Prix Unitaire, Prix Total, Site */}
       <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-xl overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 border-b border-slate-100">
@@ -179,8 +180,8 @@ export const InventoryView = ({
               <th className="px-8 py-8">Produit</th>
               <th className="px-6 py-8 text-center">Catégorie</th>
               <th className="px-6 py-8 text-center">Quantité & Audit</th>
-              {!settings?.maskSensitiveData && <th className="px-6 py-8 text-right">Prix Unitaire</th>}
-              {!settings?.maskSensitiveData && <th className="px-6 py-8 text-right">Prix Total</th>}
+              {!settings.maskSensitiveData && <th className="px-6 py-8 text-right">Prix Unitaire</th>}
+              {!settings.maskSensitiveData && <th className="px-6 py-8 text-right">Prix Total</th>}
               <th className="px-6 py-8">Site / Emplacement</th>
               <th className="px-6 py-8 text-right no-print">Actions</th>
             </tr>
@@ -202,44 +203,62 @@ export const InventoryView = ({
                       </button>
                     </td>
                     <td className="px-6 py-7 text-center font-black text-slate-300 text-[10px] italic">{idx + 1}</td>
-                    <td className="px-6 py-7"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{p.id}</p></td>
+                    
+                    <td className="px-6 py-7">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{p.id}</p>
+                    </td>
+
                     <td className="px-8 py-7">
                        <div className="flex flex-col">
                           <p className="text-[13px] font-black uppercase italic text-slate-900 group-hover:text-[#1a3a22] leading-tight">{p.name}</p>
                           {isLow && <span className="text-[7px] font-black text-rose-500 uppercase mt-1 tracking-tighter animate-pulse flex items-center gap-1"><AlertCircle className="w-2 h-2" /> SEUIL CRITIQUE</span>}
                        </div>
                     </td>
+
                     <td className="px-6 py-7 text-center">
                       <span className="text-[9px] font-black uppercase text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{p.category}</span>
                     </td>
+
                     <td className="px-6 py-7 text-center">
                        <div className="flex flex-col items-center gap-2">
                           <div className="flex items-center gap-3 no-print">
-                             <button onClick={() => onMovement(p.id, -1, "Ajustement manuel rapide", 'manual_update')} className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-rose-100 hover:text-rose-500 transition-all"><Minus className="w-3.5 h-3.5" /></button>
+                             <button onClick={() => onMovement(p, -1)} className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-rose-100 hover:text-rose-500 transition-all"><Minus className="w-3.5 h-3.5" /></button>
                              <span className={`text-xl font-header italic ${isLow ? 'text-rose-500' : 'text-[#1a3a22]'}`}>{p.currentStock}</span>
-                             <button onClick={() => onMovement(p.id, 1, "Ajustement manuel rapide", 'manual_update')} className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-emerald-100 hover:text-emerald-500 transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                             <button onClick={() => onMovement(p, 1)} className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-emerald-100 hover:text-emerald-500 transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                             
                              <div className="h-4 w-px bg-slate-100 mx-1" />
-                             <button onClick={() => onQuickInventory(p.id)} title={`Inventaire Rapide (Cible: ${p.targetStock})`} className="p-1.5 bg-indigo-50 text-indigo-400 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"><CheckCircle2 className="w-3.5 h-3.5" /></button>
+                             
+                             <button 
+                               onClick={() => onQuickInventory(p.id)} 
+                               title={`Inventaire Rapide (Cible: ${p.targetStock})`}
+                               className="p-1.5 bg-indigo-50 text-indigo-400 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                             >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                             </button>
                           </div>
                           <span className="print:block hidden text-xl font-header italic text-[#1a3a22]">{p.currentStock}</span>
                           <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">{p.unit}</span>
                        </div>
                     </td>
-                    {!settings?.maskSensitiveData && (
+
+                    {!settings.maskSensitiveData && (
                       <td className="px-6 py-7 text-right">
                         <p className="text-[11px] font-black italic text-slate-400">{unitPriceFc.toLocaleString()} <span className="text-[7px]">Fc</span></p>
                       </td>
                     )}
-                    {!settings?.maskSensitiveData && (
+
+                    {!settings.maskSensitiveData && (
                       <td className="px-6 py-7 text-right">
                         <p className="text-sm font-header italic text-[#1a3a22]">{totalPriceFc.toLocaleString()} <span className="text-[8px] font-black">FC</span></p>
                       </td>
                     )}
+
                     <td className="px-6 py-7">
                       <p className="text-[9px] font-bold text-slate-400 flex items-center gap-1.5 uppercase">
-                        <MapPin className="w-3 h-3 text-slate-300" /> {sites?.find(s => s.id === p.siteId)?.name || 'N/A'}
+                        <MapPin className="w-3 h-3 text-slate-300" /> {sites.find(s => s.id === p.siteId)?.name || 'N/A'}
                       </p>
                     </td>
+
                     <td className="px-6 py-7 text-right no-print">
                       <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
                         <button onClick={() => onCopyProducts([p])} title="Copier la fiche" className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Copy className="w-3.5 h-3.5" /></button>
@@ -253,6 +272,13 @@ export const InventoryView = ({
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 flex items-center gap-4 no-print opacity-60">
+        <Info className="w-5 h-5 text-slate-400" />
+        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-loose">
+          <b>Multi-sélection :</b> Cochez les cases à gauche pour copier plusieurs articles en lot et les dupliquer sur un autre site via l'onglet <i>"Sites"</i>.
+        </p>
       </div>
     </div>
   );

@@ -153,70 +153,89 @@ export const FurnitureView = ({
     notify("Registre mobilier exporté en CSV.");
   };
 
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+    if (!window.confirm(`IMPORTATION PATRIMOINE : ${files.length} fichier(s) détecté(s). Voulez-vous lancer l'analyse ?`)) {
+      e.target.value = '';
+      return;
+    }
 
-        if (data.length <= 1) {
-          notify("Le fichier est vide ou l'en-tête est manquant.", "error");
-          return;
-        }
+    const siteMap = new Map(sites.map(s => [s.name.toLowerCase().trim(), s.id]));
+    const defaultSiteId = sites.length > 0 ? sites[0].id : 'SITE-001';
+    let allNewItems: Furniture[] = [];
 
-        const newItems: Furniture[] = [];
-        let errors = 0;
-        let successes = 0;
+    const filePromises = Array.from(files).map(file => {
+      return new Promise<void>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const data = evt.target?.result;
+            const workbook = XLSX.read(data, { type: 'binary' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-        for (let i = 1; i < data.length; i++) {
-          const row = data[i];
-          if (!row || row.length === 0 || (row.length === 1 && !row[0])) continue;
+            if (rows.length < 2) return resolve();
 
-          const [siteName, name, code, count, condition, comment] = row;
-          const site = sites.find(s => s.name.toLowerCase() === String(siteName || '').trim().toLowerCase());
-          
-          if (!name || !site) {
-            errors++;
-            continue;
+            const headers = rows[0].map(h => String(h || '').toLowerCase().trim());
+            const findIdx = (names: string[]) => headers.findIndex(h => names.some(n => h.includes(n.toLowerCase())));
+            
+            const idxName = findIdx(['nom', 'désignation', 'designation', 'article', 'item', 'meuble', 'actif']);
+            const idxCode = findIdx(['code', 'référence', 'reference', 'ref', 'sku', 'id']);
+            const idxQty = findIdx(['quantité', 'quantite', 'qty', 'nombre', 'count']);
+            const idxCond = findIdx(['état', 'etat', 'condition', 'statut']);
+            const idxSite = findIdx(['site', 'service', 'localisation', 'bureau', 'pièce']);
+            const idxObs = findIdx(['observation', 'commentaire', 'comment', 'obs', 'note']);
+
+            for (let i = 1; i < rows.length; i++) {
+              const row = rows[i];
+              if (!row || row.length === 0) continue;
+
+              const name = idxName !== -1 ? String(row[idxName] || '').trim() : '';
+              if (!name) continue;
+
+              const siteName = idxSite !== -1 ? String(row[idxSite] || '').toLowerCase().trim() : '';
+              const siteId = siteMap.get(siteName) || defaultSiteId;
+              
+              const rawCond = idxCond !== -1 ? String(row[idxCond] || '').trim().toLowerCase() : '';
+              let condition: any = 'Bon';
+              if (rawCond.includes('neuf')) condition = 'Neuf';
+              else if (rawCond.includes('use') || rawCond.includes('usé')) condition = 'Usé';
+              else if (rawCond.includes('endo') || rawCond.includes('casse')) condition = 'Endommagé';
+
+              allNewItems.push({
+                id: `F-IMP-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                siteId: siteId,
+                name: name.toUpperCase(),
+                code: idxCode !== -1 ? String(row[idxCode] || '').trim() : `MOB-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+                currentCount: idxQty !== -1 ? Number(row[idxQty]) || 1 : 1,
+                condition: condition,
+                lastChecked: new Date().toISOString(),
+                comment: idxObs !== -1 ? String(row[idxObs] || '').trim() : ''
+              });
+            }
+          } catch (err) {
+            console.error("Erreur import patrimoine:", err);
           }
+          resolve();
+        };
+        reader.readAsBinaryString(file);
+      });
+    });
 
-          const validConditions = ['Neuf', 'Bon', 'Usé', 'Endommagé'];
-          const finalCondition = validConditions.includes(String(condition)) ? condition : 'Bon';
+    await Promise.all(filePromises);
 
-          newItems.push({
-            id: `F-IMP-${Date.now()}-${i}`,
-            siteId: site.id,
-            name: String(name).trim().toUpperCase(),
-            code: String(code || `MOB-${Math.random().toString(36).substr(2, 6).toUpperCase()}`).trim(),
-            currentCount: Number(count) || 1,
-            condition: finalCondition as any,
-            lastChecked: new Date().toISOString(),
-            comment: String(comment || '').trim()
-          });
-          successes++;
-        }
-
-        if (newItems.length > 0) {
-          if (window.confirm(`IMPORTATION : Voulez-vous injecter ${successes} articles dans le registre mobilier ?`)) {
-            setFurniture([...newItems, ...furniture]);
-            notify(`${successes} article(s) importé(s).`, 'success');
-          }
-        } else {
-          notify(`Échec de l'import : aucune donnée valide détectée.`, "error");
-        }
-      } catch (err) {
-        notify("Erreur technique lors de la lecture du fichier.", "error");
+    if (allNewItems.length > 0) {
+      if (window.confirm(`RÉSULTAT PATRIMOINE : ${allNewItems.length} actifs détectés. Valider l'enregistrement dans le registre ?`)) {
+        setFurniture([...allNewItems, ...furniture]);
+        notify(`${allNewItems.length} article(s) de patrimoine importé(s) avec succès.`, 'success');
+        setActiveTab('registry');
       }
-      if (e.target) e.target.value = '';
-    };
-    reader.readAsBinaryString(file);
+    } else {
+      notify("Aucune donnée de patrimoine valide détectée.", "error");
+    }
+    e.target.value = '';
   };
 
   return (
@@ -234,9 +253,9 @@ export const FurnitureView = ({
          <div className="flex gap-4">
            {activeTab === 'registry' && (
              <>
-               <input ref={furnitureImportRef} type="file" accept=".csv, .xlsx, .xls" className="hidden" onChange={handleFileImport} />
+               <input ref={furnitureImportRef} type="file" accept=".csv, .xlsx, .xls" className="hidden" multiple onChange={handleFileImport} />
                <button onClick={() => furnitureImportRef.current?.click()} className="flex items-center gap-3 px-8 py-5 bg-white border border-slate-200 text-slate-600 rounded-3xl font-black text-[11px] uppercase hover:bg-slate-50 transition-all shadow-sm">
-                 <FileUp className="w-4 h-4 text-emerald-600" /> Importer
+                 <FileUp className="w-4 h-4 text-emerald-600" /> Importer Multi
                </button>
                <button onClick={handleExportFurniture} className="flex items-center gap-3 px-8 py-5 bg-white border border-slate-200 text-slate-600 rounded-3xl font-black text-[11px] uppercase hover:bg-slate-50 transition-all shadow-sm">
                  <FileDown className="w-4 h-4 text-blue-600" /> Exporter
