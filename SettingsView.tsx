@@ -6,7 +6,7 @@ import {
   MapPin, Globe, List, Plus, Edit3, Check, X,
   Printer, Layout, EyeOff, Hash, Type, 
   Maximize, Minimize, Paintbrush, Palette, TableProperties,
-  FileText, AlignLeft, AlignCenter, Bell
+  FileText, AlignLeft, AlignCenter, Bell, Tags, Box
 } from 'lucide-react';
 import { AppSettings } from './types';
 
@@ -21,12 +21,14 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem, notify
   const [activeRibbon, setActiveRibbon] = useState<'IDENTITY' | 'EXCEL_STYLE' | 'SYSTEM'>('IDENTITY');
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [hasChanges, setHasChanges] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
 
-  // Synchroniser avec les props si nécessaire (ex: backup importé)
+  // Synchroniser avec les props seulement si le parent change (ex: reset ou import)
+  // On évite de réinitialiser si l'utilisateur est en train de modifier localement
   useEffect(() => {
     setLocalSettings(settings);
     setHasChanges(false);
-  }, [settings]);
+  }, [settings.enterpriseName, settings.locationId, settings.exchangeRate, settings.categories]);
 
   const handleChange = (key: keyof AppSettings, value: any) => {
     setLocalSettings(prev => ({ ...prev, [key]: value }));
@@ -37,6 +39,33 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem, notify
     onUpdateSettings(localSettings);
     setHasChanges(false);
     notify("Paramètres enregistrés avec succès !", "success");
+  };
+
+  const addCategory = () => {
+    const val = newCategory.trim();
+    if (!val) return;
+    if (localSettings.categories.map(c => c.toUpperCase()).includes(val.toUpperCase())) {
+      return notify("Cette catégorie existe déjà.", "warning");
+    }
+    
+    const updatedCategories = [...localSettings.categories, val];
+    // On met à jour localement ET on notifie le parent immédiatement pour la persistance
+    const newSettings = { ...localSettings, categories: updatedCategories };
+    setLocalSettings(newSettings);
+    onUpdateSettings(newSettings);
+    
+    setNewCategory('');
+    notify(`Catégorie "${val}" ajoutée et sauvegardée.`);
+  };
+
+  const removeCategory = (cat: string) => {
+    if (confirm(`Supprimer la catégorie "${cat}" ? Les produits existants ne seront pas modifiés.`)) {
+      const updatedCategories = localSettings.categories.filter(c => c !== cat);
+      const newSettings = { ...localSettings, categories: updatedCategories };
+      setLocalSettings(newSettings);
+      onUpdateSettings(newSettings);
+      notify(`Catégorie "${cat}" retirée.`);
+    }
   };
 
   const handleExportBackup = () => {
@@ -60,7 +89,7 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem, notify
       {/* NAVIGATION DU RUBAN DE PARAMÈTRES */}
       <div className="bg-white p-2 rounded-[2rem] border border-slate-100 shadow-sm flex gap-2 no-print">
          {[
-           { id: 'IDENTITY', label: 'Identité & Print', icon: Building2 },
+           { id: 'IDENTITY', label: 'Identité & Catalogue', icon: Building2 },
            { id: 'EXCEL_STYLE', label: 'Style Excel (Impression)', icon: TableProperties },
            { id: 'SYSTEM', label: 'Maintenance Système', icon: Database }
          ].map(tab => (
@@ -78,135 +107,203 @@ export const SettingsView = ({ settings, onUpdateSettings, onResetSystem, notify
 
       <div className="animate-fade-in">
         {activeRibbon === 'IDENTITY' && (
-          <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-10">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <div className="space-y-6">
-                   <h3 className="text-xl font-header italic uppercase text-slate-900 border-l-4 border-emerald-500 pl-4">Entité & Localisation</h3>
-                   <div className="space-y-4">
-                      <div className="space-y-2">
-                         <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Désignation Entreprise</label>
-                         <input 
-                            type="text" 
-                            className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                            value={localSettings.enterpriseName}
-                            onChange={(e) => handleChange('enterpriseName', e.target.value)}
-                         />
+          <div className="space-y-10">
+            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-10">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  <div className="space-y-6">
+                     <h3 className="text-xl font-header italic uppercase text-slate-900 border-l-4 border-emerald-500 pl-4">Entité & Localisation</h3>
+                     <div className="space-y-4">
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Désignation Entreprise</label>
+                           <input 
+                              type="text" 
+                              className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                              value={localSettings.enterpriseName}
+                              onChange={(e) => handleChange('enterpriseName', e.target.value)}
+                           />
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black uppercase text-slate-400 ml-2">ID Magasin / Dépôt Principal</label>
+                           <input 
+                              type="text" 
+                              className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                              value={localSettings.locationId}
+                              onChange={(e) => handleChange('locationId', e.target.value)}
+                           />
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Taux de Change (1$ = ? Fc)</label>
+                           <input 
+                              type="number" 
+                              className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
+                              value={localSettings.exchangeRate}
+                              onChange={(e) => handleChange('exchangeRate', Number(e.target.value))}
+                           />
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="space-y-6">
+                     <h3 className="text-xl font-header italic uppercase text-slate-900 border-l-4 border-emerald-500 pl-4">Configuration des Rapports</h3>
+                     <div className="space-y-4">
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black uppercase text-slate-400 ml-2 flex items-center gap-2">
+                              <AlignLeft className="w-3 h-3" /> En-tête Personnalisé (Print)
+                           </label>
+                           <textarea 
+                              rows={2}
+                              className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22] resize-none" 
+                              placeholder="ex: REGISTRE OFFICIEL DE STOCK ET PATRIMOINE"
+                              value={localSettings.printHeader}
+                              onChange={(e) => handleChange('printHeader', e.target.value)}
+                           />
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black uppercase text-slate-400 ml-2 flex items-center gap-2">
+                              <AlignCenter className="w-3 h-3" /> Pied de Page / Signatures (Print)
+                           </label>
+                           <textarea 
+                              rows={2}
+                              className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22] resize-none" 
+                              placeholder="ex: Document généré par SmartStock Pro ERP System"
+                              value={localSettings.printFooter}
+                              onChange={(e) => handleChange('printFooter', e.target.value)}
+                           />
+                        </div>
+                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                           <p className="text-[8px] font-black uppercase text-amber-700 italic flex items-center gap-2">
+                              <FileText className="w-3 h-3" /> Ces textes apparaîtront sur tous les PDF et impressions.
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               <div className="pt-10 border-t border-slate-50 space-y-6">
+                  <h3 className="text-xl font-header italic uppercase text-slate-900 border-l-4 border-emerald-500 pl-4">Notifications & Alertes</h3>
+                  <div className="flex flex-wrap gap-4">
+                    <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between group">
+                      <div className="flex items-center gap-4">
+                          <div className="p-3 bg-white rounded-2xl shadow-sm text-amber-500 group-hover:bg-amber-500 group-hover:text-white transition-all">
+                            <Bell className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-black uppercase italic text-slate-900 leading-none">Alertes Stock Critique</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Notification push en cas de seuil bas</p>
+                          </div>
                       </div>
-                      <div className="space-y-2">
-                         <label className="text-[9px] font-black uppercase text-slate-400 ml-2">ID Magasin / Dépôt Principal</label>
-                         <input 
-                            type="text" 
-                            className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[12px] font-black outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                            value={localSettings.locationId}
-                            onChange={(e) => handleChange('locationId', e.target.value)}
-                         />
+                      <input 
+                        type="checkbox" 
+                        className="w-6 h-6 accent-[#1a3a22] cursor-pointer" 
+                        checked={localSettings.notificationsEnabled} 
+                        onChange={(e) => handleChange('notificationsEnabled', e.target.checked)} 
+                      />
+                    </div>
+
+                    <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between group">
+                      <div className="flex items-center gap-4">
+                          <div className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:bg-[#1a3a22] group-hover:text-white transition-all">
+                            <EyeOff className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-black uppercase italic text-slate-900 leading-none">Masquer Données Sensibles</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Cache les prix et valeurs globales</p>
+                          </div>
                       </div>
-                      <div className="space-y-2">
-                         <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Taux de Change (1$ = ? Fc)</label>
-                         <input 
-                            type="number" 
-                            className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-xl font-header italic outline-none focus:ring-2 focus:ring-[#1a3a22]" 
-                            value={localSettings.exchangeRate}
-                            onChange={(e) => handleChange('exchangeRate', Number(e.target.value))}
-                         />
+                      <input 
+                        type="checkbox" 
+                        className="w-6 h-6 accent-[#1a3a22] cursor-pointer" 
+                        checked={localSettings.maskSensitiveData} 
+                        onChange={(e) => handleChange('maskSensitiveData', e.target.checked)} 
+                      />
+                    </div>
+
+                    <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between group">
+                      <div className="flex items-center gap-4">
+                          <div className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:bg-[#1a3a22] group-hover:text-white transition-all">
+                            <Hash className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-black uppercase italic text-slate-900 leading-none">Numérotation Pages</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Affiche "Page X/Y" sur impression</p>
+                          </div>
                       </div>
+                      <input 
+                        type="checkbox" 
+                        className="w-6 h-6 accent-[#1a3a22] cursor-pointer" 
+                        checked={localSettings.showPageNumbers} 
+                        onChange={(e) => handleChange('showPageNumbers', e.target.checked)} 
+                      />
+                    </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* GESTION DES CATÉGORIES DYNAMIQUE */}
+            <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-8 animate-fade-in">
+                <div className="flex items-center gap-4">
+                   <div className="p-4 bg-indigo-50 rounded-[1.5rem] text-indigo-600">
+                      <Tags className="w-6 h-6" />
+                   </div>
+                   <div>
+                      <h3 className="text-xl font-header italic uppercase">Gestion du Catalogue</h3>
+                      <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Contrôle dynamique des catégories de produits</p>
                    </div>
                 </div>
 
-                <div className="space-y-6">
-                   <h3 className="text-xl font-header italic uppercase text-slate-900 border-l-4 border-emerald-500 pl-4">Configuration des Rapports</h3>
-                   <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                   <div className="space-y-6">
                       <div className="space-y-2">
-                         <label className="text-[9px] font-black uppercase text-slate-400 ml-2 flex items-center gap-2">
-                            <AlignLeft className="w-3 h-3" /> En-tête Personnalisé (Print)
-                         </label>
-                         <textarea 
-                            rows={2}
-                            className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black uppercase italic outline-none focus:ring-2 focus:ring-[#1a3a22] resize-none" 
-                            placeholder="ex: REGISTRE OFFICIEL DE STOCK ET PATRIMOINE"
-                            value={localSettings.printHeader}
-                            onChange={(e) => handleChange('printHeader', e.target.value)}
-                         />
+                        <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Ajouter une catégorie</label>
+                        <div className="flex gap-2">
+                           <input 
+                              type="text" 
+                              placeholder="ex: CONSOMMABLES TECHNIQUES" 
+                              className="flex-1 bg-slate-50 border border-slate-100 p-4 rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-indigo-500"
+                              value={newCategory}
+                              onChange={(e) => setNewCategory(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && addCategory()}
+                           />
+                           <button 
+                             onClick={addCategory}
+                             className="p-4 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg"
+                           >
+                              <Plus className="w-5 h-5" />
+                           </button>
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                         <label className="text-[9px] font-black uppercase text-slate-400 ml-2 flex items-center gap-2">
-                            <AlignCenter className="w-3 h-3" /> Pied de Page / Signatures (Print)
-                         </label>
-                         <textarea 
-                            rows={2}
-                            className="w-full bg-slate-50 border border-slate-100 p-5 rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22] resize-none" 
-                            placeholder="ex: Document généré par SmartStock Pro ERP System"
-                            value={localSettings.printFooter}
-                            onChange={(e) => handleChange('printFooter', e.target.value)}
-                         />
-                      </div>
-                      <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
-                         <p className="text-[8px] font-black uppercase text-amber-700 italic flex items-center gap-2">
-                            <FileText className="w-3 h-3" /> Ces textes apparaîtront sur tous les PDF et impressions.
+                      <div className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100">
+                         <p className="text-[9px] font-black text-blue-700 uppercase italic flex items-center gap-2 mb-2">
+                           <Box className="w-3 h-3" /> Sauvegarde Automatique
+                         </p>
+                         <p className="text-[9px] font-bold text-blue-500 uppercase leading-relaxed">
+                           Les catégories sont enregistrées instantanément. Elles apparaissent immédiatement dans les listes déroulantes de vos produits.
                          </p>
                       </div>
                    </div>
+
+                   <div className="space-y-4">
+                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Catégories Actives ({localSettings.categories.length})</label>
+                      <div className="flex flex-wrap gap-2 max-h-[250px] overflow-y-auto p-2 custom-scrollbar border border-slate-50 rounded-2xl">
+                         {localSettings.categories.length === 0 ? (
+                            <p className="text-[9px] font-black text-slate-300 uppercase italic p-4">Aucune catégorie configurée</p>
+                         ) : (
+                            localSettings.categories.map(cat => (
+                               <div key={cat} className="group flex items-center gap-2 bg-slate-100 hover:bg-white hover:ring-2 hover:ring-indigo-500 px-4 py-2.5 rounded-xl transition-all shadow-sm">
+                                  <span className="text-[10px] font-black uppercase text-slate-700">{cat}</span>
+                                  <button 
+                                    onClick={() => removeCategory(cat)}
+                                    className="p-1 text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                     <X className="w-3.5 h-3.5" />
+                                  </button>
+                               </div>
+                            ))
+                         )}
+                      </div>
+                   </div>
                 </div>
-             </div>
-
-             <div className="pt-10 border-t border-slate-50 space-y-6">
-                <h3 className="text-xl font-header italic uppercase text-slate-900 border-l-4 border-emerald-500 pl-4">Notifications & Alertes</h3>
-                <div className="flex flex-wrap gap-4">
-                  <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between group">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-white rounded-2xl shadow-sm text-amber-500 group-hover:bg-amber-500 group-hover:text-white transition-all">
-                          <Bell className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-black uppercase italic text-slate-900 leading-none">Alertes Stock Critique</p>
-                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Notification push en cas de seuil bas</p>
-                        </div>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      className="w-6 h-6 accent-[#1a3a22] cursor-pointer" 
-                      checked={localSettings.notificationsEnabled} 
-                      onChange={(e) => handleChange('notificationsEnabled', e.target.checked)} 
-                    />
-                  </div>
-
-                  <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between group">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:bg-[#1a3a22] group-hover:text-white transition-all">
-                          <EyeOff className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-black uppercase italic text-slate-900 leading-none">Masquer Données Sensibles</p>
-                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Cache les prix et valeurs globales</p>
-                        </div>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      className="w-6 h-6 accent-[#1a3a22] cursor-pointer" 
-                      checked={localSettings.maskSensitiveData} 
-                      onChange={(e) => handleChange('maskSensitiveData', e.target.checked)} 
-                    />
-                  </div>
-
-                  <div className="bg-slate-50 p-6 rounded-3xl flex-1 min-w-[200px] flex items-center justify-between group">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 group-hover:bg-[#1a3a22] group-hover:text-white transition-all">
-                          <Hash className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-black uppercase italic text-slate-900 leading-none">Numérotation Pages</p>
-                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-widest">Affiche "Page X/Y" sur impression</p>
-                        </div>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      className="w-6 h-6 accent-[#1a3a22] cursor-pointer" 
-                      checked={localSettings.showPageNumbers} 
-                      onChange={(e) => handleChange('showPageNumbers', e.target.checked)} 
-                    />
-                  </div>
-                </div>
-             </div>
+            </div>
           </div>
         )}
 

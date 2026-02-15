@@ -3,7 +3,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { 
   Search, Plus, Download, Upload, Edit3, Printer, Activity, MapPin, 
   Trash2, FileDown, FileUp, FileText, Database, X, ChevronDown, 
-  CheckCircle2, AlertCircle, Info, FileSpreadsheet, History, Minus
+  CheckCircle2, AlertCircle, Info, FileSpreadsheet, History, Minus, Copy, CheckSquare
 } from 'lucide-react';
 import { Product, AppSettings, Site } from './types';
 import { Badge } from './Badge';
@@ -18,6 +18,7 @@ interface InventoryViewProps {
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onAdd: () => void;
   onDelete: (id: string) => void;
+  onCopyProducts: (ps: Product[]) => void;
 }
 
 export const InventoryView = ({ 
@@ -29,13 +30,25 @@ export const InventoryView = ({
   onEdit, 
   onImport, 
   onAdd, 
-  onDelete
+  onDelete,
+  onCopyProducts
 }: InventoryViewProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSite, setFilterSite] = useState('All');
+  const [filterCategory, setFilterCategory] = useState('All'); // Ajout du filtre catégorie
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const exchangeRate = settings.exchangeRate;
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p: Product) => {
+      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSite = filterSite === 'All' || p.siteId === filterSite;
+      const matchesCategory = filterCategory === 'All' || p.category === filterCategory;
+      return matchesSearch && matchesSite && matchesCategory;
+    });
+  }, [products, searchTerm, filterSite, filterCategory]);
 
   const handleExportCSV = () => {
     if (products.length === 0) return alert("Aucune donnée à exporter.");
@@ -67,13 +80,23 @@ export const InventoryView = ({
     document.body.removeChild(link);
   };
 
-  const filteredProducts = useMemo(() => {
-    return products.filter((p: Product) => {
-      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.id.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesSite = filterSite === 'All' || p.siteId === filterSite;
-      return matchesSearch && matchesSite;
-    });
-  }, [products, searchTerm, filterSite]);
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredProducts.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredProducts.map(p => p.id));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleCopySelected = () => {
+    const selectedProducts = products.filter(p => selectedIds.includes(p.id));
+    onCopyProducts(selectedProducts);
+    setSelectedIds([]);
+  };
 
   return (
     <div className="space-y-8 animate-fade-in pb-32">
@@ -90,17 +113,36 @@ export const InventoryView = ({
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <select 
-            className="bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
-            value={filterSite}
-            onChange={(e) => setFilterSite(e.target.value)}
-          >
-            <option value="All">TOUS LES SITES</option>
-            {sites.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
-          </select>
+          <div className="flex gap-2">
+            <select 
+              className="bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
+              value={filterSite}
+              onChange={(e) => setFilterSite(e.target.value)}
+            >
+              <option value="All">TOUS LES SITES</option>
+              {sites.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
+            </select>
+            <select 
+              className="bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-[11px] font-black uppercase outline-none focus:ring-2 focus:ring-[#1a3a22]"
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+            >
+              <option value="All">TOUTES CATÉGORIES</option>
+              {settings.categories.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+            </select>
+          </div>
         </div>
         
         <div className="flex items-center gap-3">
+          {selectedIds.length > 0 && (
+             <button 
+               onClick={handleCopySelected}
+               className="flex items-center gap-3 px-8 py-4.5 bg-blue-600 text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl animate-slide-in"
+             >
+               <Copy className="w-5 h-5" /> Copier ({selectedIds.length})
+             </button>
+          )}
+
           <button 
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-3 px-8 py-4.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest hover:bg-emerald-100 transition-all shadow-sm"
@@ -128,6 +170,11 @@ export const InventoryView = ({
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 border-b border-slate-100">
             <tr>
+              <th className="px-6 py-8 text-center w-16 no-print">
+                <button onClick={toggleSelectAll} className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
+                  <CheckSquare className={`w-5 h-5 ${selectedIds.length === filteredProducts.length && filteredProducts.length > 0 ? 'text-[#1a3a22]' : 'text-slate-300'}`} />
+                </button>
+              </th>
               <th className="px-6 py-8 text-center w-16">N°</th>
               <th className="px-6 py-8">ID / Réf</th>
               <th className="px-8 py-8">Produit</th>
@@ -141,14 +188,20 @@ export const InventoryView = ({
           </thead>
           <tbody className="divide-y divide-slate-50">
             {filteredProducts.length === 0 ? (
-              <tr><td colSpan={9} className="px-10 py-32 text-center opacity-20"><Database className="w-16 h-16 mx-auto mb-4" /><p className="text-xl font-header uppercase">Aucune donnée trouvée</p></td></tr>
+              <tr><td colSpan={10} className="px-10 py-32 text-center opacity-20"><Database className="w-16 h-16 mx-auto mb-4" /><p className="text-xl font-header uppercase">Aucune donnée trouvée</p></td></tr>
             ) : (
               filteredProducts.map((p, idx) => {
+                const isSelected = selectedIds.includes(p.id);
                 const isLow = p.currentStock <= p.minStock;
                 const unitPriceFc = p.currency === '$' ? p.unitPrice * exchangeRate : p.unitPrice;
                 const totalPriceFc = p.currentStock * unitPriceFc;
                 return (
-                  <tr key={p.id} className={`group hover:bg-slate-50/50 transition-colors ${isLow ? 'bg-rose-50/20' : ''}`}>
+                  <tr key={p.id} className={`group hover:bg-slate-50/50 transition-colors ${isLow ? 'bg-rose-50/20' : ''} ${isSelected ? 'bg-emerald-50/30' : ''}`}>
+                    <td className="px-6 py-7 text-center no-print">
+                      <button onClick={() => toggleSelectOne(p.id)} className="p-2 hover:bg-white rounded-lg transition-all shadow-sm">
+                        <CheckSquare className={`w-5 h-5 ${isSelected ? 'text-[#1a3a22]' : 'text-slate-200'}`} />
+                      </button>
+                    </td>
                     <td className="px-6 py-7 text-center font-black text-slate-300 text-[10px] italic">{idx + 1}</td>
                     
                     <td className="px-6 py-7">
@@ -208,7 +261,8 @@ export const InventoryView = ({
 
                     <td className="px-6 py-7 text-right no-print">
                       <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
-                        <button onClick={() => onEdit(p)} title="Modifier" className="p-2 bg-slate-50 text-slate-600 rounded-lg hover:bg-[#1a3a22] hover:text-white transition-all shadow-sm"><Edit3 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => onCopyProducts([p])} title="Copier la fiche" className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Copy className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => onEdit(p)} title="Modifier" className="p-2 bg-slate-600 text-white rounded-lg hover:bg-[#1a3a22] transition-all shadow-sm"><Edit3 className="w-3.5 h-3.5" /></button>
                         <button onClick={() => onDelete(p.id)} title="Supprimer" className="p-2 bg-rose-50 text-rose-300 rounded-lg hover:bg-rose-500 hover:text-white transition-all shadow-sm"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
@@ -223,7 +277,7 @@ export const InventoryView = ({
       <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 flex items-center gap-4 no-print opacity-60">
         <Info className="w-5 h-5 text-slate-400" />
         <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-loose">
-          <b>Smart Inventory :</b> Utilisez l'icône <CheckCircle2 className="inline w-3 h-3" /> pour synchroniser instantanément le stock avec votre niveau cible prédéfini. Un log <i>"Inventaire rapide"</i> sera archivé.
+          <b>Multi-sélection :</b> Cochez les cases à gauche pour copier plusieurs articles en lot et les dupliquer sur un autre site via l'onglet <i>"Sites"</i>.
         </p>
       </div>
     </div>

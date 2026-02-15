@@ -26,6 +26,7 @@ export interface AppSettings {
   defaultSafetyMargin: number;
   autoBackup: boolean;
   units: string[];
+  categories: string[]; // Ajout de la gestion dynamique des catégories
   printHeader: string;
   printFooter: string;
   maskSensitiveData: boolean;
@@ -48,7 +49,7 @@ export interface Product {
   category: string;
   currentStock: number;
   minStock: number;
-  targetStock: number; // Ajout du stock cible
+  targetStock: number; 
   monthlyNeed: number;
   unit: string;
   unitPrice: number;
@@ -94,7 +95,7 @@ export interface FurnitureAuditSession {
 export interface InventoryLog {
   id: string;
   date: string;
-  type: 'entry' | 'exit' | 'transfer' | 'adjustment' | 'manual_update'; // Ajout de manual_update
+  type: 'entry' | 'exit' | 'transfer' | 'adjustment' | 'manual_update';
   productId: string;
   productName: string;
   changeAmount: number;

@@ -5,20 +5,19 @@ import {
   CheckCircle2, Save, RotateCcw, TrendingDown, TrendingUp,
   MapPin, Layers, Info
 } from 'lucide-react';
-import { Product, Site } from './types';
+import { Product, Site, AppSettings } from './types';
 import { Badge } from './Badge';
-import { INITIAL_CATEGORIES } from './constants';
 
 interface AuditViewProps {
   products: Product[];
   sites: Site[];
+  settings: AppSettings;
   exchangeRate: number;
   onUpdateStock: (prodId: string, amount: number, reason: string, type: 'adjustment') => void;
-  // Fix: Added 'warning' to the notify type signature
   notify: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
-export const AuditView = ({ products, sites, exchangeRate, onUpdateStock, notify }: AuditViewProps) => {
+export const AuditView = ({ products, sites, settings, exchangeRate, onUpdateStock, notify }: AuditViewProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSite, setFilterSite] = useState('All');
   const [filterCategory, setFilterCategory] = useState('All');
@@ -41,7 +40,6 @@ export const AuditView = ({ products, sites, exchangeRate, onUpdateStock, notify
     let totalGain = 0;
     let diffCount = 0;
 
-    // Explicitly cast Object.entries to resolve arithmetic operation type errors on count
     (Object.entries(physicalCounts) as [string, number][]).forEach(([id, count]) => {
       const product = products.find(p => p.id === id);
       if (product) {
@@ -72,7 +70,6 @@ export const AuditView = ({ products, sites, exchangeRate, onUpdateStock, notify
     }
 
     if (confirm(`Confirmer la régularisation de ${auditMetrics.diffCount} articles ? L'impact financier net est de ${auditMetrics.netImpact.toLocaleString()} Fc.`)) {
-      // Explicitly cast Object.entries to resolve arithmetic operation type errors on count
       (Object.entries(physicalCounts) as [string, number][]).forEach(([id, count]) => {
         const product = products.find(p => p.id === id);
         if (product && count !== product.currentStock) {
@@ -145,7 +142,7 @@ export const AuditView = ({ products, sites, exchangeRate, onUpdateStock, notify
                onChange={(e) => setFilterCategory(e.target.value)}
              >
                 <option value="All">Catégories</option>
-                {INITIAL_CATEGORIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                {settings.categories.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
              </select>
           </div>
           <div className="flex gap-3">
