@@ -99,7 +99,6 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // On fusionne avec les défauts pour garantir que les nouvelles propriétés (comme categories) existent
         return { ...DEFAULT_SETTINGS, ...parsed };
       } catch (e) {
         return DEFAULT_SETTINGS;
@@ -133,6 +132,11 @@ const App: React.FC = () => {
   };
 
   const handleTransaction = (prodId: string, amount: number, reason: string, type: 'entry' | 'exit' | 'transfer' | 'adjustment' | 'manual_update') => {
+    // Confirmation for Manual Movements
+    if (type === 'manual_update' || type === 'adjustment') {
+      if (!window.confirm(`CONFIRMATION ACTION : Voulez-vous valider ce mouvement de stock de ${amount} unités ?`)) return;
+    }
+
     setProducts(prev => prev.map(p => {
       if (p.id === prodId) {
         const newStock = p.currentStock + amount;
@@ -165,6 +169,7 @@ const App: React.FC = () => {
   const handleQuickInventory = (prodId: string) => {
     const p = products.find(prod => prod.id === prodId);
     if (p) {
+      if (!window.confirm(`ACTION INVENTAIRE : Voulez-vous synchroniser le stock de "${p.name}" avec sa cible de ${p.targetStock} ?`)) return;
       const diff = p.targetStock - p.currentStock;
       if (diff === 0) return notify("Stock déjà conforme à la cible.", "info");
       handleTransaction(prodId, diff, "Inventaire de régularisation rapide", 'adjustment');
@@ -174,6 +179,7 @@ const App: React.FC = () => {
   const handleDeleteProduct = (id: string) => {
     const product = products.find(p => p.id === id);
     if (product) {
+      if (!window.confirm(`SUPPRESSION : Voulez-vous déplacer l'article "${product.name}" dans la corbeille ?`)) return;
       setProducts(prev => prev.filter(p => p.id !== id));
       setTrashProducts(prev => [product, ...prev]);
       notify(`"${product.name}" déplacé dans la corbeille.`, 'warning');
@@ -183,33 +189,59 @@ const App: React.FC = () => {
   const handleRestoreProduct = (id: string) => {
     const product = trashProducts.find(p => p.id === id);
     if (product) {
+      if (!window.confirm(`RESTAURATION : Voulez-vous restaurer l'article "${product.name}" dans l'inventaire actif ?`)) return;
       setTrashProducts(prev => prev.filter(p => p.id !== id));
       setProducts(prev => [product, ...prev]);
       notify(`"${product.name}" restauré.`);
     }
   };
 
+  // Fix: Implemented handleCopyProducts to store products in the application's internal clipboard state
   const handleCopyProducts = (ps: Product[]) => {
     setCopiedProducts(ps);
-    notify(`${ps.length} produit(s) copié(s) dans le presse-papier.`);
+    notify(`${ps.length} article(s) copié(s) dans le presse-papier.`);
   };
 
+  // Fix: Implemented handlePasteProducts to duplicate copied products to a target site with fresh unique IDs
   const handlePasteProducts = (siteId: string) => {
     if (copiedProducts.length === 0) return;
-    const newItems = copiedProducts.map(p => ({
+    const site = sites.find(s => s.id === siteId);
+    if (!site) return;
+
+    const newProducts: Product[] = copiedProducts.map(p => ({
       ...p,
-      id: `P-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      siteId,
-      currentStock: 0
+      id: `P-DUP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      siteId: siteId,
+      currentStock: 0, // Resetting stock to zero for the new location deployment
+      lastInventoryDate: new Date().toISOString()
     }));
-    setProducts(prev => [...prev, ...newItems]);
+
+    setProducts(prev => [...newProducts, ...prev]);
     setCopiedProducts([]);
-    notify(`${newItems.length} produit(s) dupliqué(s) sur ce site.`);
+    notify(`${newProducts.length} article(s) dupliqué(s) vers ${site.name}.`, 'success');
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("DÉCONNEXION : Êtes-vous sûr de vouloir fermer votre session ?")) {
+      setIsLoggedIn(false);
+      notify("Session clôturée avec succès.", "info");
+    }
   };
 
   const resetSystem = () => {
-    localStorage.clear();
-    window.location.reload();
+    if (window.confirm("ALERTE CRITIQUE : Vous êtes sur le point d'effacer TOUTES les données (Produits, Sites, Historique, Paramètres). Cette action est IRRÉVERSIBLE. Voulez-vous continuer ?")) {
+      if (window.confirm("DERNIER AVERTISSEMENT : Toutes les données seront perdues définitivement. Confirmez-vous la réinitialisation totale du système ERP ?")) {
+        localStorage.clear();
+        window.location.reload();
+      }
+    }
+  };
+
+  const handleUpdateSettings = (newSettings: AppSettings) => {
+    if (window.confirm("MODIFICATION PARAMÈTRES : Voulez-vous écraser la configuration actuelle par ces nouveaux réglages ?")) {
+      setSettings(newSettings);
+      notify("Configuration système mise à jour.");
+    }
   };
 
   // --- INTERNAL SEARCH VIEW ---
@@ -289,7 +321,7 @@ const App: React.FC = () => {
                 ))}
               </div>
             </div>
-            {/* Autres sections de recherche similaires ici... */}
+            {/* Autres sections de recherche ici... */}
           </div>
         )}
       </div>
@@ -309,7 +341,7 @@ const App: React.FC = () => {
           products={products} 
           settings={settings} 
           sites={sites} 
-          onMovement={(p, v) => handleTransaction(p.id, v, "Ajustement manuel rapide", 'manual_update')}
+          onMovement={handleTransaction}
           onQuickInventory={handleQuickInventory}
           onEdit={(p) => notify("Fonction de modification détaillée en cours...", "info")}
           onImport={(e) => notify("Traitement de l'import CSV...", "info")}
@@ -337,7 +369,7 @@ const App: React.FC = () => {
         />
       );
       case 'suppliers': return <SuppliersView suppliers={suppliers} setSuppliers={setSuppliers} notify={notify} />;
-      case 'needs_list': return <NeedsReportView products={products} settings={settings} needsHistory={needsHistory} onSaveReport={(r) => setNeedsHistory([r, ...needsHistory])} onDeleteReport={(id) => setNeedsHistory(needsHistory.filter(n => n.id !== id))} sites={sites} />;
+      case 'needs_list': return <NeedsReportView products={products} settings={settings} needsHistory={needsHistory} onSaveReport={(r) => { if(window.confirm("BESOINS : Voulez-vous valider et archiver cet état de besoins ?")) setNeedsHistory([r, ...needsHistory]); }} onDeleteReport={(id) => { if(window.confirm("SUPPRESSION : Supprimer définitivement cet archive de besoins ?")) setNeedsHistory(needsHistory.filter(n => n.id !== id)); }} sites={sites} />;
       case 'traceability': return <TraceabilityView history={history} settings={settings} sites={sites} />;
       case 'tasks': return <TasksView tasks={tasks} setTasks={setTasks} notify={notify} />;
       case 'trash': return (
@@ -345,15 +377,15 @@ const App: React.FC = () => {
           products={trashProducts} 
           furniture={trashFurniture} 
           onRestoreProduct={handleRestoreProduct} 
-          onDeleteProduct={(id) => setTrashProducts(prev => prev.filter(p => p.id !== id))}
+          onDeleteProduct={(id) => { if(window.confirm("ALERTE : Cette action supprimera DÉFINITIVEMENT cet article. Continuer ?")) setTrashProducts(prev => prev.filter(p => p.id !== id)); }}
           onRestoreFurniture={(id) => {
             const f = trashFurniture.find(item => item.id === id);
-            if (f) { setTrashFurniture(prev => prev.filter(i => i.id !== id)); setFurniture(prev => [...prev, f]); notify("Mobilier restauré."); }
+            if (f) { if(window.confirm(`RESTAURATION : Restaurer "${f.name}" ?`)) { setTrashFurniture(prev => prev.filter(i => i.id !== id)); setFurniture(prev => [...prev, f]); notify("Mobilier restauré."); } }
           }}
-          onDeleteFurniture={(id) => setTrashFurniture(prev => prev.filter(f => f.id !== id))}
+          onDeleteFurniture={(id) => { if(window.confirm("ALERTE : Suppression DÉFINITIVE de ce mobilier. Continuer ?")) setTrashFurniture(prev => prev.filter(f => f.id !== id)); }}
         />
       );
-      case 'settings': return <SettingsView settings={settings} onUpdateSettings={setSettings} onResetSystem={resetSystem} notify={notify} />;
+      case 'settings': return <SettingsView settings={settings} onUpdateSettings={handleUpdateSettings} onResetSystem={resetSystem} notify={notify} />;
       default: return <DashboardView products={products} sites={sites} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setView} logisticsBalance={logisticsBalance} settings={settings} />;
     }
   };
@@ -399,7 +431,7 @@ const App: React.FC = () => {
         </nav>
 
         <button 
-          onClick={() => setIsLoggedIn(false)}
+          onClick={handleLogout}
           className="mt-10 flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-rose-300 hover:bg-rose-500/10 transition-all shrink-0"
         >
           <LogOut className="w-5 h-5" />

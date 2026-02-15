@@ -12,7 +12,7 @@ interface InventoryViewProps {
   products: Product[];
   settings: AppSettings;
   sites: Site[];
-  onMovement: (p: Product, val: number) => void;
+  onMovement: (prodId: string, val: number, reason: string, type: any) => void;
   onQuickInventory: (prodId: string) => void;
   onEdit: (p: Product) => void;
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -215,9 +215,9 @@ export const InventoryView = ({
                     <td className="px-6 py-7 text-center">
                        <div className="flex flex-col items-center gap-2">
                           <div className="flex items-center gap-3 no-print">
-                             <button onClick={() => onMovement(p, -1)} className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-rose-100 hover:text-rose-500 transition-all"><Minus className="w-3.5 h-3.5" /></button>
+                             <button onClick={() => onMovement(p.id, -1, "Ajustement manuel rapide", 'manual_update')} className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-rose-100 hover:text-rose-500 transition-all"><Minus className="w-3.5 h-3.5" /></button>
                              <span className={`text-xl font-header italic ${isLow ? 'text-rose-500' : 'text-[#1a3a22]'}`}>{p.currentStock}</span>
-                             <button onClick={() => onMovement(p, 1)} className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-emerald-100 hover:text-emerald-500 transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                             <button onClick={() => onMovement(p.id, 1, "Ajustement manuel rapide", 'manual_update')} className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-emerald-100 hover:text-emerald-500 transition-all"><Plus className="w-3.5 h-3.5" /></button>
                              <div className="h-4 w-px bg-slate-100 mx-1" />
                              <button onClick={() => onQuickInventory(p.id)} title={`Inventaire Rapide (Cible: ${p.targetStock})`} className="p-1.5 bg-indigo-50 text-indigo-400 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"><CheckCircle2 className="w-3.5 h-3.5" /></button>
                           </div>
