@@ -26,7 +26,7 @@ export interface AppSettings {
   defaultSafetyMargin: number;
   autoBackup: boolean;
   units: string[];
-  categories: string[]; // Ajout de la gestion dynamique des catégories
+  categories: string[]; 
   printHeader: string;
   printFooter: string;
   maskSensitiveData: boolean;
@@ -142,6 +142,7 @@ export interface Task {
 export type ViewType = 
   | 'dashboard' 
   | 'inventory' 
+  | 'automated_import'
   | 'furniture' 
   | 'sites' 
   | 'suppliers' 

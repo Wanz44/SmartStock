@@ -5,7 +5,7 @@ import {
   Settings, CheckSquare, FileBarChart, X,
   MapPin, Lamp, Truck, Database,
   Plus, Save, Trash2, ShoppingCart, Edit3, RotateCcw, Cpu, Search, Command, ChevronRight,
-  CheckCircle2, AlertCircle, Info
+  CheckCircle2, AlertCircle, Info, FileUp, ClipboardPaste
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { 
@@ -14,7 +14,7 @@ import {
 } from './types';
 import { INITIAL_CATEGORIES, INITIAL_UNITS } from './constants';
 
-// Vues (Utilisation de chemins relatifs standards pour compatibilité ES Modules)
+// Vues
 import { DashboardView } from './DashboardView';
 import { InventoryView } from './InventoryView';
 import { GlobalHistoryView } from './GlobalHistoryView';
@@ -30,6 +30,7 @@ import { FurnitureView } from './FurnitureView';
 import { MovementsView } from './MovementsView';
 import { SuppliersView } from './SuppliersView';
 import { TrashView } from './TrashView';
+import { AutomatedImportView } from './AutomatedImportView';
 
 // Services
 import { getAutomatedAnalysis } from './services/analysisService';
@@ -70,6 +71,7 @@ const getViewTitle = (view: ViewType): string => {
   switch (view) {
     case 'dashboard': return 'Tableau de Bord';
     case 'inventory': return 'Consommables';
+    case 'automated_import': return 'Import Automatisé';
     case 'furniture': return 'Mobilier';
     case 'sites': return 'Sites Logistiques';
     case 'suppliers': return 'Fournisseurs';
@@ -325,6 +327,11 @@ export default function App() {
     notify(`Produit ajouté.`);
   };
 
+  const handleBatchImport = (newItems: Product[]) => {
+    setProducts([...newItems, ...products]);
+    setActiveView('inventory');
+  };
+
   const handleUpdateProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editProductData) return;
@@ -363,6 +370,7 @@ export default function App() {
         <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
           <NavItem active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} icon={LayoutDashboard} label="Tableau de bord" />
           <NavItem active={activeView === 'inventory'} onClick={() => setActiveView('inventory')} icon={Box} label="Consommables" />
+          <NavItem active={activeView === 'automated_import'} onClick={() => setActiveView('automated_import')} icon={ClipboardPaste} label="Import Automatisé" />
           <NavItem active={activeView === 'furniture'} onClick={() => setActiveView('furniture')} icon={Lamp} label="Mobilier" />
           <NavItem active={activeView === 'sites'} onClick={() => setActiveView('sites')} icon={MapPin} label="Sites" />
           <NavItem active={activeView === 'suppliers'} onClick={() => setActiveView('suppliers')} icon={Truck} label="Fournisseurs" />
@@ -384,6 +392,7 @@ export default function App() {
         <section className="animate-fade-in">
           {activeView === 'dashboard' && <DashboardView products={products} sites={sites} furniture={furniture} history={history} exchangeRate={settings.exchangeRate} setView={setActiveView} logisticsBalance={logisticsBalance} settings={settings} />}
           {activeView === 'inventory' && <InventoryView products={products} sites={sites} settings={settings} onMovement={(p, val) => handleTransaction(p.id, val, "Mise à jour rapide", "adjustment")} onQuickInventory={handleQuickInventory} onEdit={(p) => { setEditProductData(p); setIsEditModalOpen(true); }} onImport={(e) => {}} onAdd={() => setIsAddModalOpen(true)} onDelete={moveToTrashProduct} onCopyProducts={handleCopyProducts} />}
+          {activeView === 'automated_import' && <AutomatedImportView sites={sites} settings={settings} onImportProducts={handleBatchImport} notify={notify} />}
           {activeView === 'furniture' && <FurnitureView furniture={furniture} setFurniture={setFurniture} furnitureAudits={furnitureAudits} setFurnitureAudits={setFurnitureAudits} sites={sites} notify={notify} onImportFurniture={(e) => {}} />}
           {activeView === 'sites' && <SitesView sites={sites} setSites={setSites} products={products} setProducts={setProducts} furniture={furniture} setFurniture={setFurniture} onAddProduct={(sid) => { setNewProductData({...newProductData, siteId: sid}); setIsAddModalOpen(true); }} onAddFurniture={() => setActiveView('furniture')} onGenerateNeeds={(sid) => { setPreselectedSiteId(sid); setActiveView('needs_list'); }} notify={notify} onTransaction={handleTransaction} onPasteProducts={handlePasteProducts} copiedCount={copiedProducts.length} onQuickInventory={handleQuickInventory} onDeleteProduct={moveToTrashProduct} />}
           {activeView === 'suppliers' && <SuppliersView suppliers={suppliers} setSuppliers={setSuppliers} notify={notify} />}
